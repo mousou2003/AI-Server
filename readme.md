@@ -76,6 +76,8 @@ This script will automatically:
 
 Update your Continue configuration (`~/.continue/config.yaml`):
 
+Install Continue extension for VS Code : https://www.continue.dev/
+Modify the config yanl file in your personal folder.
 ```yaml
 name: Local Assistant
 version: 1.0.0
