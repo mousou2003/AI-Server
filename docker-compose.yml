@@ -8,7 +8,7 @@ services:
       - LLAMA_ARG_PORT=11435
       - LLAMA_ARG_N_GPU_LAYERS=35
       - LLAMA_ARG_NGL=1
-      - LLAMA_ARG_CHAT_TEMPLATE=chatml
+      - LLAMA_ARG_CHAT_TEMPLATE=llama2
     volumes:
       - ./models:/models
     ports:
