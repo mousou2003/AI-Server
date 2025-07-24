@@ -3,12 +3,13 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llama-server
     environment:
-      - LLAMA_ARG_MODEL=/models/deepseek-coder-6.7B-instruct.Q4_K_M.gguf
+      - LLAMA_ARG_MODEL=/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf
       - LLAMA_ARG_HOST=0.0.0.0
       - LLAMA_ARG_PORT=11435
       - LLAMA_ARG_N_GPU_LAYERS=35
       - LLAMA_ARG_NGL=1
-      - LLAMA_ARG_CHAT_TEMPLATE=llama2
+      # Remove the incorrect chat template - let the model use its own template
+      # - LLAMA_ARG_CHAT_TEMPLATE=llama2  # This was causing the issue!
     volumes:
       - ./models:/models
     ports:
@@ -20,20 +21,38 @@ services:
             - capabilities: [gpu]
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+      - ./models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    restart: unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
     ports:
       - "3000:8080"
     environment:
-      - OLLAMA_HOST=http://llama-server:11435
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
-      - llama-server
+      - ollama
     volumes:
       - open-webui:/app/backend/data
 
 volumes:
   open-webui:
+  ollama:
 
 networks:
   openwebui_net:
