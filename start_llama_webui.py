@@ -122,21 +122,26 @@ def ensure_model_exists():
 def main(cleanup=False):
     ensure_model_exists()
 
-    print("🚀 Starting llama.cpp stack...")
+    print("🚀 Starting llama.cpp + Open WebUI stack...")
     run_subprocess("docker compose up -d")
 
     client = docker.from_env()
-    for name in ["llama-server"]:
+    for name in ["llama-server", "open-webui"]:
         try:
             client.containers.get(name).restart()
             print(f"🔄 Restarted container: {name}")
         except docker.errors.NotFound:
             print(f"⚠️ Container not found: {name}")
 
+    wait_for_api("Open WebUI", "http://localhost:3000")
     wait_for_api("llama.cpp API", "http://localhost:11435/v1/models", require_models=True)
     wait_for_chat_endpoint()
     test_llama_chat_completion()
     test_cursor_compatibility()
+
+    if not cleanup:
+        if input("🌐 Open WebUI in browser now? (y/n): ").strip().lower() == "y":
+            webbrowser.open("http://localhost:3000")
 
     if cleanup:
         print("🧹 Cleaning up...")
