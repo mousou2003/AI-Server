@@ -27,8 +27,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama:/root/.ollama
-      - ./models:/models
+      - ./ollama-models/.ollama:/root/.ollama
     deploy:
       resources:
         reservations:
@@ -52,7 +51,6 @@ services:
 
 volumes:
   open-webui:
-  ollama:
 
 networks:
   openwebui_net:

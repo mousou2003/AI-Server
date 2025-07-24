@@ -65,13 +65,23 @@ class ServiceConfig:
 
 config = ServiceConfig()
 
-def run_subprocess(cmd, check=True):
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-    if check and result.returncode != 0:
-        print(f"❌ Command failed: {cmd}")
-        print(result.stderr.strip())
-        sys.exit(1)
-    return result.stdout.strip()
+def run_subprocess(cmd, check=True, show_output=False):
+    if show_output:
+        # Show output in real-time for commands like docker compose
+        print(f"🔧 Running: {cmd}")
+        result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8', errors='ignore')
+        if check and result.returncode != 0:
+            print(f"❌ Command failed: {cmd}")
+            sys.exit(1)
+        return ""
+    else:
+        # Capture output for other commands
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        if check and result.returncode != 0:
+            print(f"❌ Command failed: {cmd}")
+            print(result.stderr.strip())
+            sys.exit(1)
+        return result.stdout.strip()
 
 class LlamaServerManager:
     def __init__(self, config):
@@ -308,7 +318,7 @@ def main(cleanup=False):
     llama_manager.ensure_model_exists()
 
     print("🚀 Starting llama.cpp + Open WebUI stack...")
-    run_subprocess("docker compose up -d")
+    run_subprocess("docker compose up -d", show_output=True)
 
     client = docker.from_env()
     for name in ["llama-server", "ollama", "open-webui"]:
@@ -337,7 +347,7 @@ def main(cleanup=False):
 
     if cleanup:
         print("🧹 Cleaning up...")
-        run_subprocess("docker compose down")
+        run_subprocess("docker compose down", show_output=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
