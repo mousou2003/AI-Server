@@ -60,46 +60,44 @@ git clone https://github.com/mousou2003/AI-Server
 cd AI-Server
 ```
 
-### 2. Pull the Model
-
-Use any GGUF model compatible with `llama.cpp`. Example:
-
-```bash
-curl -L -o models/deepseek-v2.gguf https://huggingface.co/...
-```
-
-### 3. Start the LLM Backend
+### 2. Start Everything
 
 ```bash
 python start_llama_webui.py
 ```
 
-### 4. Start WebUI Proxy (with GPU acceleration)
+This script will automatically:
+- ✅ Download the DeepSeek Coder V2 model if needed (~10GB)
+- 🚀 Start llama.cpp server with GPU acceleration
+- 🐳 Launch Docker containers (Open WebUI + Ollama)
+- 🧪 Test the endpoints to ensure everything works
 
-```bash
-docker run -d -p 3000:8080 --gpus=all \
-  -v ollama:/root/.ollama \
-  -v open-webui:/app/backend/data \
-  --name open-webui \
-  --restart always \
-  ghcr.io/open-webui/open-webui:ollama
-```
+### 3. Configure VS Code
 
-### 5. Configure VS Code
+Update your Continue configuration (`~/.continue/config.yaml`):
 
-Update `~/.cursor/config.json`:
-
-```json
-{
-  "providers": {
-    "local-llama": {
-      "baseURL": "http://<last-nuc tailscale IP>:8080",
-      "model": "deepseek-coder-v2",
-      "apiKey": "anystring"
-    }
-  },
-  "defaultProvider": "local-llama"
-}
+```yaml
+name: Local Assistant
+version: 1.0.0
+schema: v1
+models:
+  - name: DeepSeek Coder
+    provider: openai
+    model: DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M
+    apiBase: http://<last-nuc tailscale IP>:11435/v1
+    roles:
+      - chat
+      - edit
+      - apply
+      - autocomplete
+context:
+  - provider: code
+  - provider: docs
+  - provider: diff
+  - provider: terminal
+  - provider: problems
+  - provider: folder
+  - provider: codebase
 ```
 
 ---
