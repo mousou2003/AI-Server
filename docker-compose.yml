@@ -43,12 +43,13 @@ services:
     ports:
       - "3000:8080"
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=https://ollama:11434
+    ssl: true
     depends_on:
       - ollama
     volumes:
       - open-webui:/app/backend/data
-    restart: unless-stopped
+
 
 volumes:
   open-webui:
