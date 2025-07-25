@@ -1,5 +1,3 @@
-version: '3.7'
-
 services: 
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
@@ -50,7 +48,7 @@ services:
       - ollama
     volumes:
       - open-webui:/app/backend/data
-
+    restart: unless-stopped
 
 volumes:
   open-webui:
