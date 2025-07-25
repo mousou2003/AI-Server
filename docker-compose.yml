@@ -1,3 +1,5 @@
+version: '3.7'
+
 services: 
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
@@ -43,8 +45,7 @@ services:
     ports:
       - "3000:8080"
     environment:
-      - OLLAMA_BASE_URL=https://ollama:11434
-    ssl: true
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       - ollama
     volumes:
