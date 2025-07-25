@@ -59,8 +59,8 @@ class ServiceConfig:
         # Open WebUI configuration
         self.webui = {
             "name": "open-webui",
-            "port": 3000,
-            "url": "http://localhost:3000"
+            "port": 443,
+            "url": "https://localhost"
         }
 
 config = ServiceConfig()
@@ -343,7 +343,7 @@ def main(cleanup=False):
 
     if not cleanup:
         if input("🌐 Open WebUI in browser now? (y/n): ").strip().lower() == "y":
-            webbrowser.open("http://localhost:3000")
+            webbrowser.open("https://localhost")
 
     if cleanup:
         print("🧹 Cleaning up...")

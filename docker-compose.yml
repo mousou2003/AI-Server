@@ -20,6 +20,8 @@ services:
           devices:
             - capabilities: [gpu]
     restart: unless-stopped
+    networks:
+      - openwebui_net
 
   ollama:
     image: ollama/ollama:latest
@@ -36,19 +38,37 @@ services:
     restart: unless-stopped
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+    networks:
+      - openwebui_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - open-webui
+    restart: unless-stopped
+    networks:
+      - openwebui_net
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
-    ports:
-      - "3000:8080"
+    expose:
+      - "8080"
     environment:
-      - OLLAMA_BASE_URL=https://ollama:11434
-    ssl: true
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       - ollama
     volumes:
       - open-webui:/app/backend/data
+    networks:
+      - openwebui_net
 
 
 volumes:
