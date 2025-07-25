@@ -48,6 +48,7 @@ services:
       - ollama
     volumes:
       - open-webui:/app/backend/data
+    restart: unless-stopped
 
 volumes:
   open-webui:
