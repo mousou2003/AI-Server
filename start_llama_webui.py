@@ -257,7 +257,7 @@ def run_subprocess(cmd, check=True, show_output=False):
 class LlamaServerManager:
     def __init__(self, config):
         self.config = config.llama_server
-        self.model_dir = config.model_dir
+        self.model_dir = config.model_dir+"/.llama"
         self.model_path = os.path.join(self.model_dir, self.config["model_file"])
         self.legacy_path = os.path.join(self.model_dir, "model.gguf")
         

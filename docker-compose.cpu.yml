@@ -11,7 +11,7 @@ services:
       - LLAMA_ARG_THREADS=8
       - LLAMA_ARG_CTX_SIZE=4096
     volumes:
-      - ./models:/models
+      - ./models/.llama:/models
     ports:
       - "11435:11435"
     restart: unless-stopped
@@ -22,7 +22,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ./ollama-models/.ollama:/root/.ollama
+      - ./models/.ollama:/root/.ollama
     restart: unless-stopped
     # CPU-only - no GPU device mapping
 
