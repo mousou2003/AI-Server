@@ -9,7 +9,7 @@ import webbrowser
 
 # Configuration for different services
 class ServiceConfig:
-    def __init__(self):
+    def __init__(self, selected_quant=None):
         self.model_dir = os.path.join(os.getcwd(), "models")
         self.inference_timeout = 60
         
@@ -21,26 +21,78 @@ class ServiceConfig:
         # - Original 6.7B model had NO agent/function calling capabilities
         # - V2 Lite has improved instruction following but still primarily for coding tasks
         # - For true agent capabilities, consider models like Claude, GPT-4, or agent-specific models
-        # 
-        # Available quantization options (quality vs size trade-off):
-        # Q8_0: 16.7GB - Extremely high quality, generally unneeded but max available quant
-        # Q6_K: 14.1GB - Very high quality, near perfect, recommended for high-end setups
-        # Q5_K_M: 11.9GB - High quality, recommended for good balance
-        # Q4_K_M: 10.4GB - Good quality, recommended (CURRENT CHOICE) - best balance
-        # Q4_K_S: 9.53GB - Slightly lower quality with more space savings
-        # IQ4_XS: 8.57GB - Decent quality, smaller than Q4_K_S with similar performance
-        # Q3_K_L: 8.45GB - Lower quality but usable, good for low RAM availability
-        # Q3_K_M: 8.12GB - Even lower quality
-        # Q2_K: 6.43GB - Very low quality but surprisingly usable
-        # 
-        # For CODE GENERATION: Q4_K_M+ recommended for best code quality and completion
-        # Q4_K_M chosen for optimal balance of code quality vs file size (fits most 12GB+ GPUs)
+        
+        # Available quantization options for DeepSeek Coder V2 Lite (quality vs size trade-off)
+        self.quantization_options = {
+            "Q8_0": {
+                "size": "16.7GB",
+                "description": "Extremely high quality, generally unneeded but max available quant",
+                "recommendation": "High-end systems with 24GB+ VRAM",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q8_0.gguf"
+            },
+            "Q6_K": {
+                "size": "14.1GB", 
+                "description": "Very high quality, near perfect",
+                "recommendation": "High-end setups with 16GB+ VRAM",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q6_K.gguf"
+            },
+            "Q5_K_M": {
+                "size": "11.9GB",
+                "description": "High quality, excellent balance",
+                "recommendation": "Good balance for 12GB+ VRAM",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q5_K_M.gguf"
+            },
+            "Q4_K_M": {
+                "size": "10.4GB",
+                "description": "Good quality, recommended default",
+                "recommendation": "Best balance for most users (8GB+ VRAM)",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+            },
+            "Q4_K_S": {
+                "size": "9.53GB",
+                "description": "Slightly lower quality with more space savings",
+                "recommendation": "Space-conscious users with 8GB+ VRAM",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_S.gguf"
+            },
+            "IQ4_XS": {
+                "size": "8.57GB",
+                "description": "Decent quality, smaller than Q4_K_S",
+                "recommendation": "Limited VRAM (6-8GB)",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-IQ4_XS.gguf"
+            },
+            "Q3_K_L": {
+                "size": "8.45GB",
+                "description": "Lower quality but usable",
+                "recommendation": "Low VRAM availability (6GB)",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q3_K_L.gguf"
+            },
+            "Q3_K_M": {
+                "size": "8.12GB",
+                "description": "Even lower quality",
+                "recommendation": "Very limited VRAM (4-6GB)",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q3_K_M.gguf"
+            },
+            "Q2_K": {
+                "size": "6.43GB",
+                "description": "Very low quality but surprisingly usable",
+                "recommendation": "Minimal VRAM (4GB or less)",
+                "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf"
+            }
+        }
+        
+        # Select quantization (default to Q4_K_M if not specified)
+        self.selected_quantization = selected_quant or "Q4_K_M"
+        selected_model = self.quantization_options[self.selected_quantization]
+        
         self.llama_server = {
             "name": "llama-server",
             "port": 11435,
             "url": "http://localhost:11435",
-            "model_file": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf",  # 10.36GB - fits most GPUs
-            "download_url": "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+            "model_file": selected_model["filename"],
+            "download_url": f"https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/{selected_model['filename']}",
+            "quantization": self.selected_quantization,
+            "size": selected_model["size"],
+            "description": selected_model["description"]
         }
         
         # Ollama configuration
@@ -64,6 +116,103 @@ class ServiceConfig:
         }
 
 config = ServiceConfig()
+
+def list_quantizations():
+    """List all available quantization options"""
+    temp_config = ServiceConfig()
+    print("\n🎯 Available DeepSeek Coder V2 Lite Quantizations:")
+    print("=" * 70)
+    for quant, info in temp_config.quantization_options.items():
+        print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
+        print(f"        💡 {info['recommendation']}")
+    print()
+
+def list_existing_models():
+    """List existing models in the models directory"""
+    models_dir = os.path.join(os.getcwd(), "models")
+    if not os.path.exists(models_dir):
+        print("📁 No models directory found")
+        return
+        
+    gguf_files = [f for f in os.listdir(models_dir) if f.endswith('.gguf')]
+    if not gguf_files:
+        print("📁 No GGUF models found in models directory")
+        return
+    
+    print(f"\n📁 Existing models in {models_dir}:")
+    print("=" * 70)
+    
+    for file in gguf_files:
+        file_path = os.path.join(models_dir, file)
+        file_size = os.path.getsize(file_path) / (1024**3)  # GB
+        
+        # Check if it's a DeepSeek model and extract quantization
+        if 'DeepSeek-Coder-V2-Lite' in file:
+            # Extract quantization from filename
+            for quant in ["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "IQ4_XS", "Q3_K_L", "Q3_K_M", "Q2_K"]:
+                if quant in file:
+                    print(f"✅ {file} ({file_size:.1f}GB) - {quant}")
+                    break
+            else:
+                print(f"❓ {file} ({file_size:.1f}GB) - Unknown quantization")
+        else:
+            print(f"📄 {file} ({file_size:.1f}GB) - Other model")
+    print()
+
+def select_quantization():
+    """Interactive quantization selection for DeepSeek Coder V2 Lite"""
+    print("\n🎯 DeepSeek Coder V2 Lite - Quantization Options")
+    print("=" * 80)
+    print("Choose the quantization level based on your hardware capabilities:")
+    print()
+    
+    # Create a temporary config to access quantization options
+    temp_config = ServiceConfig()
+    options = temp_config.quantization_options
+    
+    # Display options in a nice table format
+    for i, (quant, info) in enumerate(options.items(), 1):
+        print(f"{i:2d}. {quant:6s} - {info['size']:>7s} - {info['description']}")
+        print(f"    💡 {info['recommendation']}")
+        print()
+    
+    print("💡 Recommendations:")
+    print("   • For best code quality: Q4_K_M or higher (Q5_K_M, Q6_K)")
+    print("   • For balanced performance: Q4_K_M (default)")
+    print("   • For limited VRAM: Q3_K_L or Q2_K")
+    print("   • For maximum quality: Q6_K or Q8_0")
+    print()
+    
+    while True:
+        try:
+            choice = input("🔢 Select quantization (1-9, or press Enter for default Q4_K_M): ").strip()
+            
+            if not choice:  # Default choice
+                return "Q4_K_M"
+            
+            choice_num = int(choice)
+            if 1 <= choice_num <= len(options):
+                selected_quant = list(options.keys())[choice_num - 1]
+                selected_info = options[selected_quant]
+                
+                print(f"\n✅ Selected: {selected_quant} ({selected_info['size']})")
+                print(f"   📝 {selected_info['description']}")
+                
+                # Confirm selection for larger models
+                if choice_num <= 3:  # Q8_0, Q6_K, Q5_K_M
+                    confirm = input(f"⚠️  This is a large model ({selected_info['size']}). Continue? (y/n): ").strip().lower()
+                    if confirm != 'y':
+                        continue
+                
+                return selected_quant
+            else:
+                print(f"❌ Invalid choice. Please select 1-{len(options)}")
+                
+        except ValueError:
+            print("❌ Invalid input. Please enter a number or press Enter for default.")
+        except KeyboardInterrupt:
+            print("\n\n❌ Selection cancelled.")
+            sys.exit(1)
 
 def run_subprocess(cmd, check=True, show_output=False):
     if show_output:
@@ -106,29 +255,71 @@ class LlamaServerManager:
     def ensure_model_exists(self):
         """Ensure a model file exists for llama-server"""
         if os.path.exists(self.model_path):
-            print(f"✅ Model file found: {self.model_path}")
+            print(f"✅ Model file found: {self.config['model_file']} ({self.config['size']})")
             return
             
+        # Check for legacy model.gguf
         if os.path.exists(self.legacy_path):
             print(f"🛠 Renaming legacy model.gguf to {self.config['model_file']}")
             os.rename(self.legacy_path, self.model_path)
             return
 
+        # Check for existing GGUF files
         if os.path.exists(self.model_dir):
             existing_files = [f for f in os.listdir(self.model_dir) if f.endswith('.gguf')]
-            if existing_files:
-                print(f"📁 Found existing GGUF files: {', '.join(existing_files)}")
-                if len(existing_files) == 1:
+            
+            # Check if we already have the exact model we want
+            if self.config['model_file'] in existing_files:
+                print(f"✅ Required model already exists: {self.config['model_file']}")
+                return
+            
+            # Check for other DeepSeek Coder V2 Lite models
+            deepseek_files = [f for f in existing_files if 'DeepSeek-Coder-V2-Lite' in f]
+            
+            if deepseek_files:
+                print(f"📁 Found existing DeepSeek Coder V2 Lite models:")
+                for i, file in enumerate(deepseek_files, 1):
+                    file_size = os.path.getsize(os.path.join(self.model_dir, file)) / (1024**3)  # GB
+                    print(f"   {i}. {file} (~{file_size:.1f}GB)")
+                
+                print(f"\n🎯 You selected: {self.config['model_file']} ({self.config['size']})")
+                
+                choice = input(f"❓ Use existing model (1-{len(deepseek_files)}) or download new? (1-{len(deepseek_files)}/d/n): ").strip().lower()
+                
+                if choice == 'd':
+                    pass  # Download new model
+                elif choice == 'n':
+                    print("❌ Cannot continue without a model.")
+                    sys.exit(1)
+                else:
+                    try:
+                        choice_num = int(choice)
+                        if 1 <= choice_num <= len(deepseek_files):
+                            selected_file = deepseek_files[choice_num - 1]
+                            self.model_path = os.path.join(self.model_dir, selected_file)
+                            print(f"✅ Using existing model: {selected_file}")
+                            return
+                    except ValueError:
+                        pass
+            
+            elif existing_files:
+                print(f"📁 Found existing GGUF files (not DeepSeek Coder V2 Lite): {', '.join(existing_files)}")
+                choice = input(f"❓ Use one of these files or download DeepSeek Coder V2 Lite? (use/download): ").strip().lower()
+                if choice == "use" and len(existing_files) == 1:
                     existing_file = os.path.join(self.model_dir, existing_files[0])
-                    choice = input(f"❓ Use existing file '{existing_files[0]}' as the model? (y/n): ").strip().lower()
-                    if choice == "y":
-                        print(f"✅ Using existing model: {existing_file}")
-                        self.model_path = existing_file
-                        return
+                    print(f"✅ Using existing model: {existing_file}")
+                    self.model_path = existing_file
+                    return
 
-        print(f"❗ No suitable model file found in {self.model_dir}")
+        # No suitable model found, offer to download
+        print(f"❗ Model not found: {self.config['model_file']}")
+        print(f"   📦 Quantization: {self.config['quantization']}")
+        print(f"   💾 Size: {self.config['size']}")
+        print(f"   📝 {self.config['description']}")
+        
         os.makedirs(self.model_dir, exist_ok=True)
-        choice = input(f"❓ Do you want to download {self.config['model_file']} (~4GB)? (y/n): ").strip().lower()
+        
+        choice = input(f"❓ Download {self.config['model_file']} ({self.config['size']})? (y/n): ").strip().lower()
         if choice == "y":
             self._download_model()
         else:
@@ -136,18 +327,39 @@ class LlamaServerManager:
             sys.exit(1)
     
     def _download_model(self):
-        """Download the model file"""
-        print("⬇️ Downloading model...")
+        """Download the model file with progress indication"""
+        print(f"⬇️ Downloading {self.config['model_file']} ({self.config['size']})...")
+        print(f"   🔗 From: {self.config['download_url']}")
+        
         try:
             with requests.get(self.config["download_url"], stream=True) as r:
                 r.raise_for_status()
+                
+                # Get total file size
+                total_size = int(r.headers.get('content-length', 0))
+                downloaded = 0
+                
                 with open(self.model_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            print("✅ Model downloaded.")
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            
+                            # Show progress every 100MB
+                            if downloaded % (100 * 1024 * 1024) == 0:
+                                if total_size > 0:
+                                    progress = (downloaded / total_size) * 100
+                                    print(f"   📊 Progress: {downloaded / (1024**3):.1f}GB / {total_size / (1024**3):.1f}GB ({progress:.1f}%)")
+                                else:
+                                    print(f"   📊 Downloaded: {downloaded / (1024**3):.1f}GB")
+                
+                final_size = os.path.getsize(self.model_path) / (1024**3)
+                print(f"✅ Download completed! Final size: {final_size:.1f}GB")
+                
         except requests.exceptions.RequestException as e:
             print(f"❌ Download failed: {e}")
-            print("💡 You can manually place a GGUF model file in the models/ directory")
+            print("💡 You can manually download the model file and place it in the models/ directory")
+            print(f"💡 Expected filename: {self.config['model_file']}")
             sys.exit(1)
     
     def wait_for_api(self, retries=30):
@@ -305,9 +517,23 @@ class WebUIManager:
         print(f"❌ {self.config['name']} not responding.")
         return False
 
-def main(cleanup=False):
-    # Create configuration
-    config = ServiceConfig()
+def main(cleanup=False, quantization=None, auto_select=False):
+    # Select quantization if not provided via command line
+    if not quantization and not auto_select:
+        quantization = select_quantization()
+    elif not quantization:
+        quantization = "Q4_K_M"  # Default for auto-select
+    
+    # Create configuration with selected quantization
+    config = ServiceConfig(selected_quant=quantization)
+    
+    # Display selected model info
+    llama_config = config.llama_server
+    print(f"\n🎯 Using DeepSeek Coder V2 Lite - {llama_config['quantization']}")
+    print(f"   📦 Model: {llama_config['model_file']}")
+    print(f"   💾 Size: {llama_config['size']}")
+    print(f"   📝 {llama_config['description']}")
+    print()
     
     # Initialize service managers
     llama_manager = LlamaServerManager(config)
@@ -350,7 +576,50 @@ def main(cleanup=False):
         run_subprocess("docker compose down", show_output=True)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--cleanup", action="store_true", help="Stop containers after test")
+    parser = argparse.ArgumentParser(
+        description="Deploy DeepSeek Coder V2 Lite with llama.cpp and Open WebUI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python start_llama_webui.py                    # Interactive quantization selection
+  python start_llama_webui.py --auto             # Use default Q4_K_M
+  python start_llama_webui.py -q Q6_K            # Use specific quantization
+  python start_llama_webui.py --list-models      # Show existing models
+  python start_llama_webui.py --list-quants      # Show available quantizations
+  python start_llama_webui.py --cleanup          # Stop containers after test
+
+Quantization recommendations:
+  • Q4_K_M or higher for best code quality
+  • Q4_K_M default for balanced performance (8GB+ VRAM)
+  • Q3_K_L or Q2_K for limited VRAM (4-6GB)
+  • Q6_K or Q8_0 for maximum quality (16GB+ VRAM)
+        """)
+    
+    parser.add_argument("--cleanup", action="store_true", 
+                       help="Stop containers after test")
+    
+    parser.add_argument("--quantization", "-q", 
+                       choices=["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "IQ4_XS", "Q3_K_L", "Q3_K_M", "Q2_K"], 
+                       help="Select quantization level directly")
+    
+    parser.add_argument("--auto", action="store_true", 
+                       help="Use default quantization (Q4_K_M) without prompting")
+    
+    parser.add_argument("--list-quants", action="store_true",
+                       help="List all available quantization options and exit")
+    
+    parser.add_argument("--list-models", action="store_true",
+                       help="List existing models in models directory and exit")
+    
     args = parser.parse_args()
-    main(cleanup=args.cleanup)
+    
+    # Handle list commands
+    if args.list_quants:
+        list_quantizations()
+        sys.exit(0)
+        
+    if args.list_models:
+        list_existing_models()
+        sys.exit(0)
+    
+    main(cleanup=args.cleanup, quantization=args.quantization, auto_select=args.auto)
