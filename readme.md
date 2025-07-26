@@ -10,7 +10,8 @@ This project sets up a **fully local AI coding assistant** with:
 ## 🚀 Key Features
 
 - **Private & Secure**: All computation happens locally on your hardware
-- **Fast Inference**: Quantized GGUF model (Q4\_K\_M) accelerated via GPU
+- **Fast Inference**: Quantized GGUF model (Q4_K_M) accelerated via GPU
+- **CPU-Only Mode**: Run without GPU for broader hardware compatibility
 - **Multi-platform Access**: Chat from browser, IDE, or mobile (via Tailscale)
 - **Code-Centric Models**: Optimized for Python, Rust, and general code generation
 
@@ -62,15 +63,30 @@ cd AI-Server
 
 ### 2. Start Everything
 
+#### GPU Mode (Recommended)
 ```bash
 python start_llama_webui.py
 ```
 
+#### CPU-Only Mode (No GPU Required)
+```bash
+python start_llama_webui.py --cpu-only
+```
+
+**Quick Examples:**
+- `python start_llama_webui.py --auto` - GPU mode with default Q4_K_M
+- `python start_llama_webui.py --cpu-only --auto` - CPU mode with default Q2_K
+- `python start_llama_webui.py --cpu-only -q Q3_K_M` - CPU mode with better quality
+
 This script will automatically:
-- ✅ Download the DeepSeek Coder V2 model if needed (~10GB)
-- 🚀 Start llama.cpp server with GPU acceleration
+- ✅ Download the DeepSeek Coder V2 model if needed (~6-17GB depending on quantization)
+- 🚀 Start llama.cpp server with GPU acceleration (or CPU-only mode)
 - 🐳 Launch Docker containers (Open WebUI + Ollama)
 - 🧪 Test the endpoints to ensure everything works
+
+**CPU vs GPU Mode:**
+- **GPU Mode**: Faster inference, requires NVIDIA GPU with 8GB+ VRAM
+- **CPU Mode**: Slower inference, works on any system with 8GB+ RAM
 
 ### 3. Configure VS Code
 

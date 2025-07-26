@@ -9,9 +9,10 @@ import webbrowser
 
 # Configuration for different services
 class ServiceConfig:
-    def __init__(self, selected_quant=None):
+    def __init__(self, selected_quant=None, cpu_only=False):
         self.model_dir = os.path.join(os.getcwd(), "models")
         self.inference_timeout = 60
+        self.cpu_only = cpu_only
         
         # Llama.cpp server configuration
         # Using DeepSeek Coder V2 Lite - excellent coding model with good balance of performance/size
@@ -27,55 +28,55 @@ class ServiceConfig:
             "Q8_0": {
                 "size": "16.7GB",
                 "description": "Extremely high quality, generally unneeded but max available quant",
-                "recommendation": "High-end systems with 24GB+ VRAM",
+                "recommendation": "High-end systems with 24GB+ VRAM" if not cpu_only else "High-end systems with 32GB+ RAM",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q8_0.gguf"
             },
             "Q6_K": {
                 "size": "14.1GB", 
                 "description": "Very high quality, near perfect",
-                "recommendation": "High-end setups with 16GB+ VRAM",
+                "recommendation": "High-end setups with 16GB+ VRAM" if not cpu_only else "High-end systems with 24GB+ RAM",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q6_K.gguf"
             },
             "Q5_K_M": {
                 "size": "11.9GB",
                 "description": "High quality, excellent balance",
-                "recommendation": "Good balance for 12GB+ VRAM",
+                "recommendation": "Good balance for 12GB+ VRAM" if not cpu_only else "Good balance for 16GB+ RAM",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q5_K_M.gguf"
             },
             "Q4_K_M": {
                 "size": "10.4GB",
                 "description": "Good quality, recommended default",
-                "recommendation": "Best balance for most users (8GB+ VRAM)",
+                "recommendation": "Best balance for most users (8GB+ VRAM)" if not cpu_only else "Best balance for CPU mode (16GB+ RAM)",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
             },
             "Q4_K_S": {
                 "size": "9.53GB",
                 "description": "Slightly lower quality with more space savings",
-                "recommendation": "Space-conscious users with 8GB+ VRAM",
+                "recommendation": "Space-conscious users with 8GB+ VRAM" if not cpu_only else "Space-conscious users with 12GB+ RAM",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_S.gguf"
             },
             "IQ4_XS": {
                 "size": "8.57GB",
                 "description": "Decent quality, smaller than Q4_K_S",
-                "recommendation": "Limited VRAM (6-8GB)",
+                "recommendation": "Limited VRAM (6-8GB)" if not cpu_only else "Limited RAM (12GB)",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-IQ4_XS.gguf"
             },
             "Q3_K_L": {
                 "size": "8.45GB",
                 "description": "Lower quality but usable",
-                "recommendation": "Low VRAM availability (6GB)",
+                "recommendation": "Low VRAM availability (6GB)" if not cpu_only else "Low RAM availability (10GB)",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q3_K_L.gguf"
             },
             "Q3_K_M": {
                 "size": "8.12GB",
                 "description": "Even lower quality",
-                "recommendation": "Very limited VRAM (4-6GB)",
+                "recommendation": "Very limited VRAM (4-6GB)" if not cpu_only else "Very limited RAM (8-10GB)",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q3_K_M.gguf"
             },
             "Q2_K": {
                 "size": "6.43GB",
                 "description": "Very low quality but surprisingly usable",
-                "recommendation": "Minimal VRAM (4GB or less)",
+                "recommendation": "Minimal VRAM (4GB or less)" if not cpu_only else "Recommended for CPU mode (8GB+ RAM)",
                 "filename": "DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf"
             }
         }
@@ -119,10 +120,18 @@ config = ServiceConfig()
 
 def list_quantizations():
     """List all available quantization options"""
-    temp_config = ServiceConfig()
     print("\n🎯 Available DeepSeek Coder V2 Lite Quantizations:")
-    print("=" * 70)
-    for quant, info in temp_config.quantization_options.items():
+    print("=" * 80)
+    
+    print("🎮 GPU Mode Recommendations:")
+    gpu_config = ServiceConfig(cpu_only=False)
+    for quant, info in gpu_config.quantization_options.items():
+        print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
+        print(f"        💡 {info['recommendation']}")
+    
+    print("\n🖥️  CPU Mode Recommendations:")
+    cpu_config = ServiceConfig(cpu_only=True)
+    for quant, info in cpu_config.quantization_options.items():
         print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
         print(f"        💡 {info['recommendation']}")
     print()
@@ -159,15 +168,21 @@ def list_existing_models():
             print(f"📄 {file} ({file_size:.1f}GB) - Other model")
     print()
 
-def select_quantization():
+def select_quantization(cpu_only=False):
     """Interactive quantization selection for DeepSeek Coder V2 Lite"""
-    print("\n🎯 DeepSeek Coder V2 Lite - Quantization Options")
+    mode_text = "CPU Mode" if cpu_only else "GPU Mode"
+    print(f"\n🎯 DeepSeek Coder V2 Lite - Quantization Options ({mode_text})")
     print("=" * 80)
+    if cpu_only:
+        print("🖥️  CPU-only mode: Models will run entirely on CPU (slower but no GPU required)")
+        print("💡 For CPU mode, consider Q2_K or Q3_K_M for better performance")
+    else:
+        print("🎮 GPU mode: Models will utilize GPU acceleration")
     print("Choose the quantization level based on your hardware capabilities:")
     print()
     
     # Create a temporary config to access quantization options
-    temp_config = ServiceConfig()
+    temp_config = ServiceConfig(cpu_only=cpu_only)
     options = temp_config.quantization_options
     
     # Display options in a nice table format
@@ -177,18 +192,25 @@ def select_quantization():
         print()
     
     print("💡 Recommendations:")
-    print("   • For best code quality: Q4_K_M or higher (Q5_K_M, Q6_K)")
-    print("   • For balanced performance: Q4_K_M (default)")
-    print("   • For limited VRAM: Q3_K_L or Q2_K")
-    print("   • For maximum quality: Q6_K or Q8_0")
+    if cpu_only:
+        print("   • For CPU mode: Q2_K or Q3_K_M (faster inference)")
+        print("   • For better quality: Q4_K_M or Q4_K_S")
+        print("   • Note: CPU inference is slower but works without GPU")
+        print("   • Ensure sufficient RAM (model size + 2-4GB overhead)")
+    else:
+        print("   • For best code quality: Q4_K_M or higher (Q5_K_M, Q6_K)")
+        print("   • For balanced performance: Q4_K_M (default)")
+        print("   • For limited VRAM: Q3_K_L or Q2_K")
+        print("   • For maximum quality: Q6_K or Q8_0")
     print()
     
     while True:
         try:
-            choice = input("🔢 Select quantization (1-9, or press Enter for default Q4_K_M): ").strip()
+            default_quant = "Q2_K" if cpu_only else "Q4_K_M"
+            choice = input(f"🔢 Select quantization (1-9, or press Enter for default {default_quant}): ").strip()
             
             if not choice:  # Default choice
-                return "Q4_K_M"
+                return default_quant
             
             choice_num = int(choice)
             if 1 <= choice_num <= len(options):
@@ -517,22 +539,27 @@ class WebUIManager:
         print(f"❌ {self.config['name']} not responding.")
         return False
 
-def main(cleanup=False, quantization=None, auto_select=False):
+def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     # Select quantization if not provided via command line
     if not quantization and not auto_select:
-        quantization = select_quantization()
+        quantization = select_quantization(cpu_only=cpu_only)
     elif not quantization:
-        quantization = "Q4_K_M"  # Default for auto-select
+        quantization = "Q2_K" if cpu_only else "Q4_K_M"  # Default for auto-select
     
-    # Create configuration with selected quantization
-    config = ServiceConfig(selected_quant=quantization)
+    # Create configuration with selected quantization and CPU mode
+    config = ServiceConfig(selected_quant=quantization, cpu_only=cpu_only)
     
     # Display selected model info
     llama_config = config.llama_server
-    print(f"\n🎯 Using DeepSeek Coder V2 Lite - {llama_config['quantization']}")
+    mode_text = "CPU Mode" if cpu_only else "GPU Mode"
+    print(f"\n🎯 Using DeepSeek Coder V2 Lite - {llama_config['quantization']} ({mode_text})")
     print(f"   📦 Model: {llama_config['model_file']}")
     print(f"   💾 Size: {llama_config['size']}")
     print(f"   📝 {llama_config['description']}")
+    if cpu_only:
+        print(f"   🖥️  Mode: CPU-only (no GPU acceleration)")
+    else:
+        print(f"   🎮 Mode: GPU-accelerated")
     print()
     
     # Initialize service managers
@@ -543,8 +570,12 @@ def main(cleanup=False, quantization=None, auto_select=False):
     # Ensure model exists for llama-server
     llama_manager.ensure_model_exists()
 
-    print("🚀 Starting llama.cpp + Open WebUI stack...")
-    run_subprocess("docker compose up -d", show_output=True)
+    # Set environment variable for docker-compose
+    os.environ['LLAMA_MODEL_FILE'] = llama_config['model_file']
+
+    compose_file = "docker-compose.cpu.yml" if cpu_only else "docker-compose.yml"
+    print(f"🚀 Starting llama.cpp + Open WebUI stack ({'CPU mode' if cpu_only else 'GPU mode'})...")
+    run_subprocess(f"docker compose -f {compose_file} up -d", show_output=True)
 
     client = docker.from_env()
     for name in ["llama-server", "ollama", "open-webui"]:
@@ -573,7 +604,7 @@ def main(cleanup=False, quantization=None, auto_select=False):
 
     if cleanup:
         print("🧹 Cleaning up...")
-        run_subprocess("docker compose down", show_output=True)
+        run_subprocess(f"docker compose -f {compose_file} down", show_output=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -581,18 +612,27 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python start_llama_webui.py                    # Interactive quantization selection
-  python start_llama_webui.py --auto             # Use default Q4_K_M
-  python start_llama_webui.py -q Q6_K            # Use specific quantization
+  python start_llama_webui.py                    # Interactive quantization selection (GPU mode)
+  python start_llama_webui.py --auto             # Use default Q4_K_M (GPU mode)
+  python start_llama_webui.py --cpu-only         # CPU-only mode with interactive selection
+  python start_llama_webui.py --cpu-only --auto  # CPU-only mode with default Q2_K
+  python start_llama_webui.py -q Q6_K            # Use specific quantization (GPU mode)
+  python start_llama_webui.py --cpu-only -q Q3_K_M # CPU mode with specific quantization
   python start_llama_webui.py --list-models      # Show existing models
   python start_llama_webui.py --list-quants      # Show available quantizations
   python start_llama_webui.py --cleanup          # Stop containers after test
 
 Quantization recommendations:
+  GPU Mode:
   • Q4_K_M or higher for best code quality
   • Q4_K_M default for balanced performance (8GB+ VRAM)
   • Q3_K_L or Q2_K for limited VRAM (4-6GB)
   • Q6_K or Q8_0 for maximum quality (16GB+ VRAM)
+
+  CPU Mode:
+  • Q2_K recommended for CPU-only mode (8GB+ RAM)
+  • Q3_K_M for better quality but slower (12GB+ RAM)
+  • Q4_K_M for best quality but much slower (16GB+ RAM)
         """)
     
     parser.add_argument("--cleanup", action="store_true", 
@@ -603,7 +643,10 @@ Quantization recommendations:
                        help="Select quantization level directly")
     
     parser.add_argument("--auto", action="store_true", 
-                       help="Use default quantization (Q4_K_M) without prompting")
+                       help="Use default quantization (Q4_K_M for GPU, Q2_K for CPU) without prompting")
+    
+    parser.add_argument("--cpu-only", action="store_true",
+                       help="Run in CPU-only mode (no GPU acceleration required)")
     
     parser.add_argument("--list-quants", action="store_true",
                        help="List all available quantization options and exit")
@@ -622,4 +665,4 @@ Quantization recommendations:
         list_existing_models()
         sys.exit(0)
     
-    main(cleanup=args.cleanup, quantization=args.quantization, auto_select=args.auto)
+    main(cleanup=args.cleanup, quantization=args.quantization, auto_select=args.auto, cpu_only=args.cpu_only)

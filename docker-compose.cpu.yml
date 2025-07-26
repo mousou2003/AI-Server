@@ -1,24 +1,19 @@
 services: 
   llama-server:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    image: ghcr.io/ggml-org/llama.cpp:server
     container_name: llama-server
     environment:
-      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf}
+      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf}
       - LLAMA_ARG_HOST=0.0.0.0
       - LLAMA_ARG_PORT=11435
-      - LLAMA_ARG_N_GPU_LAYERS=35
-      - LLAMA_ARG_NGL=1
-      # Remove the incorrect chat template - let the model use its own template
-      # - LLAMA_ARG_CHAT_TEMPLATE=llama2  # This was causing the issue!
+      # CPU-only configuration - no GPU layers
+      - LLAMA_ARG_N_GPU_LAYERS=0
+      - LLAMA_ARG_THREADS=8
+      - LLAMA_ARG_CTX_SIZE=4096
     volumes:
       - ./models:/models
     ports:
       - "11435:11435"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     restart: unless-stopped
 
   ollama:
@@ -28,14 +23,8 @@ services:
       - "11434:11434"
     volumes:
       - ./ollama-models/.ollama:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     restart: unless-stopped
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+    # CPU-only - no GPU device mapping
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
