@@ -116,143 +116,117 @@ class ServiceConfig:
             "url": "http://localhost:3000"
         }
 
+    @staticmethod
+    def list_quantizations():
+        """List all available quantization options"""
+        print("\n🎯 Available DeepSeek Coder V2 Lite Quantizations:")
+        print("=" * 80)
+        
+        print("🎮 GPU Mode Recommendations:")
+        gpu_config = ServiceConfig(cpu_only=False)
+        for quant, info in gpu_config.quantization_options.items():
+            print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
+            print(f"        💡 {info['recommendation']}")
+        
+        print("\n🖥️  CPU Mode Recommendations:")
+        cpu_config = ServiceConfig(cpu_only=True)
+        for quant, info in cpu_config.quantization_options.items():
+            print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
+            print(f"        💡 {info['recommendation']}")
+        print()
+
+    @staticmethod
+    def select_quantization(cpu_only=False):
+        """Interactive quantization selection for DeepSeek Coder V2 Lite"""
+        mode_text = "CPU Mode" if cpu_only else "GPU Mode"
+        print(f"\n🎯 DeepSeek Coder V2 Lite - Quantization Options ({mode_text})")
+        print("=" * 80)
+        if cpu_only:
+            print("🖥️  CPU-only mode: Models will run entirely on CPU (slower but no GPU required)")
+            print("💡 For CPU mode, consider Q2_K or Q3_K_M for better performance")
+        else:
+            print("🎮 GPU mode: Models will utilize GPU acceleration")
+        print("Choose the quantization level based on your hardware capabilities:")
+        print()
+        
+        # Create a temporary config to access quantization options
+        temp_config = ServiceConfig(cpu_only=cpu_only)
+        options = temp_config.quantization_options
+        
+        # Display options in a nice table format
+        for i, (quant, info) in enumerate(options.items(), 1):
+            print(f"{i:2d}. {quant:6s} - {info['size']:>7s} - {info['description']}")
+            print(f"    💡 {info['recommendation']}")
+            print()
+        
+        print("💡 Recommendations:")
+        if cpu_only:
+            print("   • For CPU mode: Q2_K or Q3_K_M (faster inference)")
+            print("   • For better quality: Q4_K_M or Q4_K_S")
+            print("   • Note: CPU inference is slower but works without GPU")
+            print("   • Ensure sufficient RAM (model size + 2-4GB overhead)")
+        else:
+            print("   • For best code quality: Q4_K_M or higher (Q5_K_M, Q6_K)")
+            print("   • For balanced performance: Q4_K_M (default)")
+            print("   • For limited VRAM: Q3_K_L or Q2_K")
+            print("   • For maximum quality: Q6_K or Q8_0")
+        print()
+        
+        while True:
+            try:
+                default_quant = "Q2_K" if cpu_only else "Q4_K_M"
+                choice = input(f"🔢 Select quantization (1-9, or press Enter for default {default_quant}): ").strip()
+                
+                if not choice:  # Default choice
+                    return default_quant
+                
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(options):
+                    selected_quant = list(options.keys())[choice_num - 1]
+                    selected_info = options[selected_quant]
+                    
+                    print(f"\n✅ Selected: {selected_quant} ({selected_info['size']})")
+                    print(f"   📝 {selected_info['description']}")
+                    
+                    # Confirm selection for larger models
+                    if choice_num <= 3:  # Q8_0, Q6_K, Q5_K_M
+                        confirm = input(f"⚠️  This is a large model ({selected_info['size']}). Continue? (y/n): ").strip().lower()
+                        if confirm != 'y':
+                            continue
+                    
+                    return selected_quant
+                else:
+                    print(f"❌ Invalid choice. Please select 1-{len(options)}")
+                    
+            except ValueError:
+                print("❌ Invalid input. Please enter a number or press Enter for default.")
+            except KeyboardInterrupt:
+                print("\n\n❌ Selection cancelled.")
+                sys.exit(1)
+
 config = ServiceConfig()
 
-def list_quantizations():
-    """List all available quantization options"""
-    print("\n🎯 Available DeepSeek Coder V2 Lite Quantizations:")
-    print("=" * 80)
+class UtilityManager:
+    """Utility functions for the application"""
     
-    print("🎮 GPU Mode Recommendations:")
-    gpu_config = ServiceConfig(cpu_only=False)
-    for quant, info in gpu_config.quantization_options.items():
-        print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
-        print(f"        💡 {info['recommendation']}")
-    
-    print("\n🖥️  CPU Mode Recommendations:")
-    cpu_config = ServiceConfig(cpu_only=True)
-    for quant, info in cpu_config.quantization_options.items():
-        print(f"{quant:6s} - {info['size']:>7s} - {info['description']}")
-        print(f"        💡 {info['recommendation']}")
-    print()
-
-def list_existing_models():
-    """List existing models in the models directory"""
-    models_dir = os.path.join(os.getcwd(), "models")
-    if not os.path.exists(models_dir):
-        print("📁 No models directory found")
-        return
-        
-    gguf_files = [f for f in os.listdir(models_dir) if f.endswith('.gguf')]
-    if not gguf_files:
-        print("📁 No GGUF models found in models directory")
-        return
-    
-    print(f"\n📁 Existing models in {models_dir}:")
-    print("=" * 70)
-    
-    for file in gguf_files:
-        file_path = os.path.join(models_dir, file)
-        file_size = os.path.getsize(file_path) / (1024**3)  # GB
-        
-        # Check if it's a DeepSeek model and extract quantization
-        if 'DeepSeek-Coder-V2-Lite' in file:
-            # Extract quantization from filename
-            for quant in ["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "IQ4_XS", "Q3_K_L", "Q3_K_M", "Q2_K"]:
-                if quant in file:
-                    print(f"✅ {file} ({file_size:.1f}GB) - {quant}")
-                    break
-            else:
-                print(f"❓ {file} ({file_size:.1f}GB) - Unknown quantization")
+    @staticmethod
+    def run_subprocess(cmd, check=True, show_output=False):
+        if show_output:
+            # Show output in real-time for commands like docker compose
+            print(f"🔧 Running: {cmd}")
+            result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8', errors='ignore')
+            if check and result.returncode != 0:
+                print(f"❌ Command failed: {cmd}")
+                sys.exit(1)
+            return ""
         else:
-            print(f"📄 {file} ({file_size:.1f}GB) - Other model")
-    print()
-
-def select_quantization(cpu_only=False):
-    """Interactive quantization selection for DeepSeek Coder V2 Lite"""
-    mode_text = "CPU Mode" if cpu_only else "GPU Mode"
-    print(f"\n🎯 DeepSeek Coder V2 Lite - Quantization Options ({mode_text})")
-    print("=" * 80)
-    if cpu_only:
-        print("🖥️  CPU-only mode: Models will run entirely on CPU (slower but no GPU required)")
-        print("💡 For CPU mode, consider Q2_K or Q3_K_M for better performance")
-    else:
-        print("🎮 GPU mode: Models will utilize GPU acceleration")
-    print("Choose the quantization level based on your hardware capabilities:")
-    print()
-    
-    # Create a temporary config to access quantization options
-    temp_config = ServiceConfig(cpu_only=cpu_only)
-    options = temp_config.quantization_options
-    
-    # Display options in a nice table format
-    for i, (quant, info) in enumerate(options.items(), 1):
-        print(f"{i:2d}. {quant:6s} - {info['size']:>7s} - {info['description']}")
-        print(f"    💡 {info['recommendation']}")
-        print()
-    
-    print("💡 Recommendations:")
-    if cpu_only:
-        print("   • For CPU mode: Q2_K or Q3_K_M (faster inference)")
-        print("   • For better quality: Q4_K_M or Q4_K_S")
-        print("   • Note: CPU inference is slower but works without GPU")
-        print("   • Ensure sufficient RAM (model size + 2-4GB overhead)")
-    else:
-        print("   • For best code quality: Q4_K_M or higher (Q5_K_M, Q6_K)")
-        print("   • For balanced performance: Q4_K_M (default)")
-        print("   • For limited VRAM: Q3_K_L or Q2_K")
-        print("   • For maximum quality: Q6_K or Q8_0")
-    print()
-    
-    while True:
-        try:
-            default_quant = "Q2_K" if cpu_only else "Q4_K_M"
-            choice = input(f"🔢 Select quantization (1-9, or press Enter for default {default_quant}): ").strip()
-            
-            if not choice:  # Default choice
-                return default_quant
-            
-            choice_num = int(choice)
-            if 1 <= choice_num <= len(options):
-                selected_quant = list(options.keys())[choice_num - 1]
-                selected_info = options[selected_quant]
-                
-                print(f"\n✅ Selected: {selected_quant} ({selected_info['size']})")
-                print(f"   📝 {selected_info['description']}")
-                
-                # Confirm selection for larger models
-                if choice_num <= 3:  # Q8_0, Q6_K, Q5_K_M
-                    confirm = input(f"⚠️  This is a large model ({selected_info['size']}). Continue? (y/n): ").strip().lower()
-                    if confirm != 'y':
-                        continue
-                
-                return selected_quant
-            else:
-                print(f"❌ Invalid choice. Please select 1-{len(options)}")
-                
-        except ValueError:
-            print("❌ Invalid input. Please enter a number or press Enter for default.")
-        except KeyboardInterrupt:
-            print("\n\n❌ Selection cancelled.")
-            sys.exit(1)
-
-def run_subprocess(cmd, check=True, show_output=False):
-    if show_output:
-        # Show output in real-time for commands like docker compose
-        print(f"🔧 Running: {cmd}")
-        result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8', errors='ignore')
-        if check and result.returncode != 0:
-            print(f"❌ Command failed: {cmd}")
-            sys.exit(1)
-        return ""
-    else:
-        # Capture output for other commands
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-        if check and result.returncode != 0:
-            print(f"❌ Command failed: {cmd}")
-            print(result.stderr.strip())
-            sys.exit(1)
-        return result.stdout.strip()
+            # Capture output for other commands
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            if check and result.returncode != 0:
+                print(f"❌ Command failed: {cmd}")
+                print(result.stderr.strip())
+                sys.exit(1)
+            return result.stdout.strip()
 
 class LlamaServerManager:
     def __init__(self, config):
@@ -260,7 +234,52 @@ class LlamaServerManager:
         self.model_dir = config.model_dir+"/.llama"
         self.model_path = os.path.join(self.model_dir, self.config["model_file"])
         self.legacy_path = os.path.join(self.model_dir, "model.gguf")
+
+    def list_existing_models(self):
+        """List existing models in the models directory"""
+        # Check both the main models directory and the llama-specific subdirectory
+        main_models_dir = os.path.dirname(self.model_dir)  # Get parent directory (models/)
         
+        all_models = []
+        
+        # Check main models directory
+        if os.path.exists(main_models_dir):
+            gguf_files = [f for f in os.listdir(main_models_dir) if f.endswith('.gguf')]
+            for file in gguf_files:
+                file_path = os.path.join(main_models_dir, file)
+                all_models.append((file, file_path, "main"))
+        
+        # Check llama-specific directory
+        if os.path.exists(self.model_dir):
+            gguf_files = [f for f in os.listdir(self.model_dir) if f.endswith('.gguf')]
+            for file in gguf_files:
+                file_path = os.path.join(self.model_dir, file)
+                all_models.append((file, file_path, "llama"))
+        
+        if not all_models:
+            print("📁 No GGUF models found in models directories")
+            return
+        
+        print(f"\n📁 Existing models:")
+        print("=" * 70)
+        
+        for file, file_path, location in all_models:
+            file_size = os.path.getsize(file_path) / (1024**3)  # GB
+            location_text = f" (in {location})" if location == "llama" else ""
+            
+            # Check if it's a DeepSeek model and extract quantization
+            if 'DeepSeek-Coder-V2-Lite' in file:
+                # Extract quantization from filename
+                for quant in ["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "IQ4_XS", "Q3_K_L", "Q3_K_M", "Q2_K"]:
+                    if quant in file:
+                        print(f"✅ {file} ({file_size:.1f}GB) - {quant}{location_text}")
+                        break
+                else:
+                    print(f"❓ {file} ({file_size:.1f}GB) - Unknown quantization{location_text}")
+            else:
+                print(f"📄 {file} ({file_size:.1f}GB) - Other model{location_text}")
+        print()
+
     def get_actual_model_file(self):
         """Get the actual model file that exists in the models directory"""
         if os.path.exists(self.model_path):
@@ -542,7 +561,7 @@ class WebUIManager:
 def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     # Select quantization if not provided via command line
     if not quantization and not auto_select:
-        quantization = select_quantization(cpu_only=cpu_only)
+        quantization = ServiceConfig.select_quantization(cpu_only=cpu_only)
     elif not quantization:
         quantization = "Q2_K" if cpu_only else "Q4_K_M"  # Default for auto-select
     
@@ -575,7 +594,7 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
 
     compose_file = "docker-compose.cpu.yml" if cpu_only else "docker-compose.yml"
     print(f"🚀 Starting llama.cpp + Open WebUI stack ({'CPU mode' if cpu_only else 'GPU mode'})...")
-    run_subprocess(f"docker compose -f {compose_file} up -d", show_output=True)
+    UtilityManager.run_subprocess(f"docker compose -f {compose_file} up -d", show_output=True)
 
     client = docker.from_env()
     for name in ["llama-server", "ollama", "open-webui"]:
@@ -604,7 +623,7 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
 
     if cleanup:
         print("🧹 Cleaning up...")
-        run_subprocess(f"docker compose -f {compose_file} down", show_output=True)
+        UtilityManager.run_subprocess(f"docker compose -f {compose_file} down", show_output=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -658,11 +677,14 @@ Quantization recommendations:
     
     # Handle list commands
     if args.list_quants:
-        list_quantizations()
+        ServiceConfig.list_quantizations()
         sys.exit(0)
         
     if args.list_models:
-        list_existing_models()
+        # Create a temporary config and manager to list models properly
+        temp_config = ServiceConfig()
+        temp_manager = LlamaServerManager(temp_config)
+        temp_manager.list_existing_models()
         sys.exit(0)
     
     main(cleanup=args.cleanup, quantization=args.quantization, auto_select=args.auto, cpu_only=args.cpu_only)
