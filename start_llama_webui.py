@@ -96,16 +96,16 @@ class ServiceConfig:
             "description": selected_model["description"]
         }
         
-        # Ollama configuration
+        # Ollama configuration - Optimized for RTX 3060 Ti (8GB VRAM)
         self.ollama = {
             "name": "ollama",
             "port": 11434,
             "url": "http://localhost:11434",
             "models": [
-                "mistral:7b",     # General purpose chat
-                "wizardcoder",    # Premium coding model (no :13b tag)
-                "phi3:mini",      # Lightweight & fast
-                "gemma:7b",       # Google's model
+                "qwen2.5-coder:7b",   # Qwen2.5-Coder 7B - Best coding model that fits 8GB VRAM
+                "gemma2:9b",          # Experimental - might work on 8GB but could be tight
+                # "qwen2.5-coder:32b",  # Too large for 8GB VRAM - disabled
+                # "gemma2:27b",         # Too large for 8GB VRAM - disabled
             ]
         }
         
