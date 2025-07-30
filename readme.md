@@ -3,17 +3,17 @@
 This project sets up a **fully local AI coding assistant** with:
 
 - 💬 Inline prompt support in VS Code via **Continue**
-- ⚙️ High-performance LLMs served by **llama.cpp** (DeepSeek-Coder V2)
+- ⚙️ High-performance LLMs served by **Ollama** (qwen2.5-coder:7b & gemma3:4B)
 - 🌐 Web interface via **Open WebUI**
 - 🔐 Secure remote access with **Tailscale**
 
 ## 🚀 Key Features
 
 - **Private & Secure**: All computation happens locally on your hardware
-- **Fast Inference**: Quantized GGUF model (Q4_K_M) accelerated via GPU
-- **CPU-Only Mode**: Run without GPU for broader hardware compatibility
+- **Fast Inference**: Optimized models (qwen2.5-coder:7b for coding, gemma3:4B with image support)
+- **Multi-Model Support**: Code generation and chat capabilities with visual understanding
 - **Multi-platform Access**: Chat from browser, IDE, or mobile (via Tailscale)
-- **Code-Centric Models**: Optimized for Python, Rust, and general code generation
+- **Code-Centric Models**: Optimized for various programming languages and tasks
 
 ---
 
@@ -34,7 +34,7 @@ This project sets up a **fully local AI coding assistant** with:
 
 | Component     | Tool                                                     | Description                              |
 | ------------- | -------------------------------------------------------- | ---------------------------------------- |
-| LLM Inference | [`llama.cpp`](https://github.com/ggerganov/llama.cpp)    | Runs quantized DeepSeek-Coder V2 locally |
+| LLM Inference | [`Ollama`](https://ollama.ai)                           | Runs qwen2.5-coder:7b and gemma3:4B locally |
 | VSCode Plugin | [`Continue`](https://continue.dev)                       | Inline chat & refactor tools             |
 | Web Interface | [`Open WebUI`](https://github.com/open-webui/open-webui) | OpenAI-compatible UI & proxy             |
 | VPN Layer     | [`Tailscale`](https://tailscale.com)                     | Encrypted access across devices          |
@@ -120,32 +120,59 @@ The script intelligently selects between `docker-compose.yml` (GPU mode) and `do
 
 Install the Continue extension for VS Code: https://www.continue.dev/
 
-Create or update your Continue configuration file at `~/.continue/config.json`:
+Create or update your Continue configuration file at `~/.continue/config.yaml`:
 
-```json
-{
-  "models": [
-    {
-      "title": "DeepSeek Coder V2 Lite",
-      "provider": "openai",
-      "model": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M",
-      "apiBase": "http://localhost:11435/v1",
-      "apiKey": "dummy"
-    }
-  ],
-  "tabAutocompleteModel": {
-    "title": "DeepSeek Coder V2 Lite",
-    "provider": "openai", 
-    "model": "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M",
-    "apiBase": "http://localhost:11435/v1",
-    "apiKey": "dummy"
-  }
-}
+```yaml
+name: Local Assistant
+version: 1.0.0
+schema: v1
+models:
+  - name: qwen2.5-coder 7b
+    provider: ollama
+    model: qwen2.5-coder:7b
+    apiBase: http://your-tailscale-hostname.ts.net:11434
+    roles:
+      - chat
+      - edit
+      - apply
+      - autocomplete
+    defaultCompletionOptions:
+      contextLength: 32768
+      maxTokens: 8192
+  - name: gemma3 4B
+    provider: ollama
+    model: gemma3:4B
+    apiBase: http://your-tailscale-hostname.ts.net:11434
+    roles:
+      - chat
+      - edit
+      - apply
+    capabilities:
+      - image_input
+    defaultCompletionOptions:
+      contextLength: 128000
+context:
+  - provider: code
+  - provider: docs
+  - provider: diff
+  - provider: terminal
+  - provider: problems
+  - provider: folder
+  - provider: codebase
+docs:
+  - name: continue
+    faviconUrl: ""
+    startUrl: https://docs.continue.dev/
 ```
 
-**For remote access via Tailscale**, replace `localhost` with your Tailscale IP:
-```json
-"apiBase": "http://<your-tailscale-ip>:11435/v1"
+**For local access**, update the `apiBase` to use `localhost`:
+```yaml
+apiBase: http://localhost:11434
+```
+
+**For remote access via Tailscale**, use your Tailscale hostname as shown in the config above:
+```yaml
+apiBase: http://your-tailscale-hostname.ts.net:11434
 ```
 
 ---
@@ -153,9 +180,9 @@ Create or update your Continue configuration file at `~/.continue/config.json`:
 ## 🔎 Verify It Works
 
 - Visit `http://localhost:3000` to access the Open WebUI in your browser
-- Test the llama.cpp API directly at `http://localhost:11435/v1/models`
+- Test the Ollama API directly at `http://localhost:11434/api/tags`
 - Use `Ctrl+K` in VS Code with Continue extension to prompt your model
-- For remote access: Replace `localhost` with your Tailscale IP and access from any device
+- For remote access: Use your Tailscale hostname (e.g., `http://your-tailscale-hostname.ts.net:11434`) to access from any device
 
 ---
 
