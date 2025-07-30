@@ -3,8 +3,13 @@ import requests
 
 
 class WebUIManager:
-    def __init__(self, config):
-        self.config = config.webui
+    def __init__(self):
+        # Open WebUI configuration
+        self.config = {
+            "name": "open-webui",
+            "port": 3000,
+            "url": "http://localhost:3000"
+        }
         
     def wait_for_api(self, retries=30):
         """Wait for WebUI to be ready"""

@@ -5,8 +5,19 @@ import docker
 
 
 class OllamaManager:
-    def __init__(self, config):
-        self.config = config.ollama
+    def __init__(self):
+        # Ollama configuration - Optimized for RTX 3060 Ti (8GB VRAM)
+        self.config = {
+            "name": "ollama",
+            "port": 11434,
+            "url": "http://localhost:11434",
+            "models": [
+                "qwen2.5-coder:7b",   # Qwen2.5-Coder 7B - Best coding model that fits 8GB VRAM
+                "gemma2:9b",          # Experimental - might work on 8GB but could be tight
+                # "qwen2.5-coder:32b",  # Too large for 8GB VRAM - disabled
+                # "gemma2:27b",         # Too large for 8GB VRAM - disabled
+            ]
+        }
         
     def wait_for_api(self, retries=30):
         """Wait for Ollama API to be ready"""

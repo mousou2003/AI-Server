@@ -5,7 +5,6 @@ import sys
 import webbrowser
 
 # Import the separated classes
-from service_config import ServiceConfig
 from utility_manager import UtilityManager
 from llama_server_manager import LlamaServerManager
 from ollama_manager import OllamaManager
@@ -14,15 +13,15 @@ from webui_manager import WebUIManager
 def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     # Select quantization if not provided via command line
     if not quantization and not auto_select:
-        quantization = ServiceConfig.select_quantization(cpu_only=cpu_only)
+        quantization = LlamaServerManager.select_quantization(cpu_only=cpu_only)
     elif not quantization:
         quantization = "Q2_K" if cpu_only else "Q4_K_M"  # Default for auto-select
     
-    # Create configuration with selected quantization and CPU mode
-    config = ServiceConfig(selected_quant=quantization, cpu_only=cpu_only)
+    # Create llama server manager with selected quantization and CPU mode
+    llama_manager = LlamaServerManager(selected_quant=quantization, cpu_only=cpu_only)
     
     # Display selected model info
-    llama_config = config.llama_server
+    llama_config = llama_manager.config
     mode_text = "CPU Mode" if cpu_only else "GPU Mode"
     print(f"\n🎯 Using DeepSeek Coder V2 Lite - {llama_config['quantization']} ({mode_text})")
     print(f"   📦 Model: {llama_config['model_file']}")
@@ -34,10 +33,9 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
         print(f"   🎮 Mode: GPU-accelerated")
     print()
     
-    # Initialize service managers
-    llama_manager = LlamaServerManager(config)
-    ollama_manager = OllamaManager(config)
-    webui_manager = WebUIManager(config)
+    # Initialize other service managers
+    ollama_manager = OllamaManager()
+    webui_manager = WebUIManager()
     
     # Ensure model exists for llama-server
     llama_manager.ensure_model_exists()
@@ -130,13 +128,12 @@ Quantization recommendations:
     
     # Handle list commands
     if args.list_quants:
-        ServiceConfig.list_quantizations()
+        LlamaServerManager.list_quantizations()
         sys.exit(0)
         
     if args.list_models:
-        # Create a temporary config and manager to list models properly
-        temp_config = ServiceConfig()
-        temp_manager = LlamaServerManager(temp_config)
+        # Create a temporary manager to list models properly
+        temp_manager = LlamaServerManager()
         temp_manager.list_existing_models()
         sys.exit(0)
     

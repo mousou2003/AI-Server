@@ -13,36 +13,37 @@ The original monolithic `start_llama_webui.py` file has been separated into modu
    - Imports and coordinates all other modules
    - Handles Docker operations and service coordination
 
-2. **`service_config.py`** - Configuration management
-   - `ServiceConfig` class with all model and service configurations
-   - Quantization options and interactive selection methods
-   - Model recommendations for different hardware setups
-
-3. **`utility_manager.py`** - Utility functions
+2. **`utility_manager.py`** - Utility functions
    - `UtilityManager` class with subprocess execution helpers
    - Command execution with error handling and output control
 
-4. **`llama_server_manager.py`** - Llama server management
+3. **`llama_server_manager.py`** - Llama server management
    - `LlamaServerManager` class for llama.cpp server operations
+   - Contains DeepSeek Coder V2 Lite quantization options and interactive selection
    - Model downloading, validation, and API testing
    - Model file management and legacy compatibility
+   - Self-contained configuration for llama-server
 
-5. **`ollama_manager.py`** - Ollama service management
+4. **`ollama_manager.py`** - Ollama service management
    - `OllamaManager` class for Ollama operations
    - Model pulling and API health checking
-   - Docker container interaction
+   - `OllamaManager` class for Ollama service operations
+   - Docker container interaction and model pulling
+   - Self-contained configuration for Ollama service
 
-6. **`webui_manager.py`** - Web UI management
+5. **`webui_manager.py`** - Web UI management
    - `WebUIManager` class for Open WebUI operations
    - Health checking and readiness validation
+   - Self-contained configuration for Open WebUI
 
 ## Benefits of This Structure
 
-1. **Modularity**: Each class has a single responsibility
-2. **Maintainability**: Easier to modify specific components
+1. **Modularity**: Each class has a single responsibility and manages its own configuration
+2. **Maintainability**: Easier to modify specific components without affecting others
 3. **Testability**: Individual classes can be tested in isolation
 4. **Readability**: Code is organized by functionality
 5. **Reusability**: Classes can be imported and used in other projects
+6. **Self-contained**: Each manager contains its own configuration, eliminating central config dependency
 
 ## Usage
 
@@ -59,7 +60,7 @@ All functionality remains the same, but the code is now better organized and eas
 ## Dependencies
 
 Each file imports only what it needs:
-- `service_config.py`: `os`, `sys`
+- `llama_server_manager.py`: `os`, `sys`, `time`, `requests`
 - `utility_manager.py`: `subprocess`, `sys`
 - `llama_server_manager.py`: `os`, `sys`, `time`, `requests`
 - `ollama_manager.py`: `time`, `requests`, `subprocess`, `docker`
