@@ -36,7 +36,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:cuda
     container_name: open-webui
     ports:
       - "3000:8080"
@@ -46,6 +46,11 @@ services:
       - ollama
     volumes:
       - open-webui:/app/backend/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     restart: unless-stopped
 
 volumes:
