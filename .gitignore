@@ -1,3 +1,17 @@
 models
 test-output
 __pycache__
+
+# Generated docker-compose files
+docker-compose.qwen-churn.yml
+
+# Staging directory for temporary files
+staging/
+
+# Workspace directory (contains user uploaded files)
+workspace/
+
+# Keep memory directory in git but ignore user data
+memory/*.csv
+memory/*.json
+memory/sessions/
