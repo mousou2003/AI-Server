@@ -1,0 +1,38 @@
+# Ollama Service - Base Configuration (CPU-optimized by default)
+# Can be used independently or with other services
+# Use docker-compose.gpu-override.yml for GPU acceleration
+# Use script-specific overrides for specialized setups
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./.ollama:/root/.ollama
+    restart: unless-stopped
+    environment:
+      # CPU-optimized defaults
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_FLASH_ATTENTION=false
+    # CPU-friendly memory limits
+    mem_limit: 16g
+    mem_reservation: 8g
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s  # Longer interval for stability
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - ai_network
+
+volumes:
+  ollama-data:
+
+networks:
+  ai_network:
+    driver: bridge
+    external: true

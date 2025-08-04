@@ -42,9 +42,16 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     # Set environment variable for docker-compose
     os.environ['LLAMA_MODEL_FILE'] = llama_config['model_file']
 
-    compose_file = "docker-compose.cpu.yml" if cpu_only else "docker-compose.yml"
+    # Build compose command with modular overrides
+    base_files = ["docker-compose.ollama.yml", "docker-compose.webui.yml", "docker-compose.llama-webui-override.yml"]
+    if not cpu_only:
+        base_files.insert(-1, "docker-compose.gpu-override.yml")  # Insert GPU override before script override
+    
+    compose_cmd = "docker compose " + " ".join([f"-f {f}" for f in base_files])
     print(f"🚀 Starting llama.cpp + Open WebUI stack ({'CPU mode' if cpu_only else 'GPU mode'})...")
-    UtilityManager.run_subprocess(f"docker compose -f {compose_file} up -d", show_output=True)
+    print(f"   Using: {' + '.join(base_files)}")
+    
+    UtilityManager.run_subprocess(f"{compose_cmd} up -d", show_output=True)
 
     # Restart containers to ensure they're fresh
     container_names = ["llama-server", "ollama", "open-webui"]
@@ -69,7 +76,8 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
 
     if cleanup:
         print("🧹 Cleaning up...")
-        UtilityManager.run_subprocess(f"docker compose -f {compose_file} down", show_output=True)
+        cleanup_cmd = "docker compose " + " ".join([f"-f {f}" for f in base_files])
+        UtilityManager.run_subprocess(f"{cleanup_cmd} down", show_output=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -86,6 +94,10 @@ Examples:
   python start_llama_webui.py --list-models      # Show existing models
   python start_llama_webui.py --list-quants      # Show available quantizations
   python start_llama_webui.py --cleanup          # Stop containers after test
+
+Architecture:
+  Base files: docker-compose.ollama.yml + docker-compose.webui.yml + docker-compose.llama-webui-override.yml (CPU-optimized)
+  GPU mode: + docker-compose.gpu-override.yml (adds GPU acceleration)
 
 Quantization recommendations:
   GPU Mode:

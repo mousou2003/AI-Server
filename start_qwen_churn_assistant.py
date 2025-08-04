@@ -8,7 +8,7 @@ It deploys Qwen2.5-Coder-32B-Instruct via Ollama and Open WebUI for churn analys
 Key Features:
 - Deploys Qwen2.5-Coder-32B-Instruct model via Ollama
 - Sets up Open WebUI for natural language churn analysis
-- Configures the environment for CSV file analysis
+- Configures specialized model with business-focused churn analysis prompt
 - No code execution - purely conversational analysis
 - Business-focused insights and recommendations
 
@@ -23,6 +23,7 @@ import os
 import sys
 import argparse
 import time
+import traceback
 from subprocess import TimeoutExpired
 import tempfile
 from pathlib import Path
@@ -99,13 +100,16 @@ class QwenChurnAssistantManager:
             project_name="churn"
         )
         
-        # Select appropriate docker-compose file based on mode
+        # Set up compose files - use modular override approach
+        self.base_ollama_file = Path("docker-compose.ollama.yml")
+        self.base_webui_file = Path("docker-compose.webui.yml")
+        self.gpu_override_file = Path("docker-compose.gpu-override.yml")
+        self.qwen_override_file = Path("docker-compose.qwen-churn-override.yml")
+        
         if cpu_mode:
-            self.compose_file = Path("docker-compose.qwen-churn.cpu.yml")
-            print(f"🖥️  Using CPU-optimized compose file: {self.compose_file}")
+            print(f"🖥️  Using: {self.base_ollama_file} + {self.base_webui_file} + {self.qwen_override_file} (CPU mode)")
         else:
-            self.compose_file = Path("docker-compose.qwen-churn.yml")
-            print(f"🚀 Using GPU-accelerated compose file: {self.compose_file}")
+            print(f"🚀 Using: {self.base_ollama_file} + {self.base_webui_file} + {self.gpu_override_file} + {self.qwen_override_file} (GPU mode)")
         
     def wait_for_services(self):
         """Wait for both Ollama and Open WebUI to be ready using managers"""
@@ -125,6 +129,29 @@ class QwenChurnAssistantManager:
             return False
             
         return True
+    
+    def get_compose_command(self, action="up", additional_args=""):
+        """Build the docker compose command with appropriate files using UtilityManager"""
+        compose_files = [str(self.base_ollama_file)]
+        
+        # Add WebUI base file (needed for the qwen override to work properly)
+        if self.base_webui_file.exists():
+            compose_files.append(str(self.base_webui_file))
+        
+        # Add GPU override if not in CPU mode
+        if not self.cpu_mode and self.gpu_override_file.exists():
+            compose_files.append(str(self.gpu_override_file))
+        
+        # Always add Qwen-specific override
+        if self.qwen_override_file.exists():
+            compose_files.append(str(self.qwen_override_file))
+        
+        return self.utility_manager.build_compose_command(
+            compose_files=compose_files,
+            project_name="qwen-churn-assistant",
+            action=action,
+            additional_args=additional_args
+        )
     
     def cleanup_all(self, remove_volumes=False):
         """Comprehensive cleanup including containers, images, and optionally volumes"""
@@ -159,25 +186,36 @@ class QwenChurnAssistantManager:
         ):
             return False
         
-        # Get docker-compose file path
-        compose_file = self.utility_manager.validate_docker_compose_file(str(self.compose_file))
+        # Validate base compose files exist using UtilityManager
+        print("🔍 Validating Docker Compose files...")
+        try:
+            base_files = [self.base_ollama_file, self.base_webui_file]
+            override_files = []
+            
+            if not self.cpu_mode:
+                override_files.append(self.gpu_override_file)
+            override_files.append(self.qwen_override_file)
+            
+            self.utility_manager.validate_compose_files(base_files, override_files)
+        except FileNotFoundError as e:
+            print(f"❌ {e}")
+            return False
+        
+        # Ensure the external network exists using UtilityManager
+        self.utility_manager.ensure_docker_network("ai_network")
         
         # Start services
         print("🐳 Starting Docker containers...")
         try:
             # First, stop any existing containers to avoid conflicts
             print("   Cleaning up any existing containers...")
-            cleanup_result = self.utility_manager.run_subprocess(
-                f"docker compose -p qwen-churn-assistant -f {compose_file} down",
-                check=False
-            )
+            cleanup_cmd = self.get_compose_command("down")
+            cleanup_result = self.utility_manager.run_subprocess(cleanup_cmd, check=False)
             
             # Start the containers
             print("   Starting new containers...")
-            result = self.utility_manager.run_subprocess(
-                f"docker compose -p qwen-churn-assistant -f {compose_file} up -d",
-                check=False
-            )
+            start_cmd = self.get_compose_command("up", "-d")
+            result = self.utility_manager.run_subprocess(start_cmd, check=False)
             
             if result.returncode != 0:
                 print(f"❌ Failed to start containers:")
@@ -264,13 +302,13 @@ class QwenChurnAssistantManager:
             print(f"   2. Select the '{self.config['custom_model_name']}' model in the WebUI")
         else:
             print(f"   2. Select the '{self.config['model_name']}' model in the WebUI")
-        print("   3. Upload your churn CSV file to the workspace")
-        print("   4. Start asking natural language questions about churn patterns")
-        print("   5. Example: 'Which customer segments have the highest churn?'")
+        print("   3. Start asking natural language questions about churn patterns")
+        print("   4. Example: 'Which customer segments have the highest churn?'")
+        print("   5. Provide specific data examples in your conversations")
         print()
         print("🧠 Features Enabled:")
         print("   📝 Memory: Conversations persist via Docker volumes")
-        print("   🗂️  Workspace: Upload and analyze CSV files directly in WebUI")
+        print("   � Interactive: Natural language churn analysis conversations")
         print("   🎯 Specialized: Business-focused churn analysis prompt")
         if prompt_configured and 'custom_model_name' in self.config:
             print(f"   🤖 Custom Model: {self.config['custom_model_name']} with embedded system prompt")
@@ -288,9 +326,10 @@ class QwenChurnAssistantManager:
         print("🛑 Stopping Qwen Churn Assistant Infrastructure...")
         
         # Build the docker compose down command
-        down_cmd = f"docker compose -p qwen-churn-assistant -f {self.compose_file} down"
+        additional_args = "-v" if remove_volumes else ""
+        down_cmd = self.get_compose_command("down", additional_args)
+        
         if remove_volumes:
-            down_cmd += " -v"
             print("🗑️  Also removing Docker volumes...")
         
         try:
@@ -312,17 +351,23 @@ class QwenChurnAssistantManager:
         mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
         print(f"📊 Qwen Churn Assistant Status ({mode_info})")
         print("=" * 50)
-        print(f"🐳 Compose file: {self.compose_file}")
+        print(f"🐳 Base Ollama file: {self.base_ollama_file}")
+        print(f"🌐 Base WebUI file: {self.base_webui_file}")
+        if not self.cpu_mode and self.gpu_override_file.exists():
+            print(f"🎮 GPU override file: {self.gpu_override_file}")
+        if self.qwen_override_file.exists():
+            print(f"🎯 Qwen override file: {self.qwen_override_file}")
         print(f"⚡ Mode: {mode_info}")
         print(f"🤖 Model: {self.config['model_name']}")
         print()
         
         try:
-            # Check containers using manager container names
+            # Check containers using UtilityManager
             containers = [self.ollama_manager.config["name"], self.webui_manager.config["name"]]
+            print("🐳 Container Status:")
             self.utility_manager.check_container_status(containers)
             
-            # Check services using WebUIManager
+            # Check services using managers
             print()
             
             # Check Ollama API using OllamaManager
@@ -332,9 +377,9 @@ class QwenChurnAssistantManager:
             # Check WebUI using WebUIManager
             service_name, url, is_running = self.webui_manager.get_status_info()
             if is_running:
-                print(f"🌐 {service_name}: ✅ Running")
+                print(f"🌐 {service_name}: ✅ Running at {url}")
             else:
-                print(f"🌐 {service_name}: ❌ Not responding")
+                print(f"🌐 {service_name}: ❌ Not responding at {url}")
                     
         except Exception as e:
             print(f"❌ Error checking status: {e}")
@@ -442,12 +487,11 @@ class QwenChurnAssistantManager:
                 
         except Exception as e:
             print(f"❌ Error creating custom model: {e}")
-            import traceback
             traceback.print_exc()
             return False
 
     def show_logs(self):
-        """Show container logs for troubleshooting using manager container names"""
+        """Show container logs for troubleshooting using UtilityManager"""
         print("📋 Container Logs")
         print("=" * 40)
         
@@ -456,19 +500,15 @@ class QwenChurnAssistantManager:
         for container_name in containers:
             print(f"\n🐳 {container_name} logs (last 20 lines):")
             print("-" * 40)
-            try:
-                result = self.utility_manager.run_subprocess(
-                    f"docker logs --tail 20 {container_name}",
-                    check=False
-                )
-                if result.returncode == 0:
-                    print(result.stdout)
-                    if result.stderr:
-                        print("STDERR:", result.stderr)
-                else:
-                    print(f"❌ Could not get logs: {result.stderr}")
-            except Exception as e:
-                print(f"❌ Error getting logs: {e}")
+            
+            stdout, stderr = self.utility_manager.get_container_logs(container_name, lines=20)
+            
+            if stdout:
+                print(stdout)
+            if stderr and "Could not get logs" in stderr:
+                print(f"❌ {stderr}")
+            elif stderr:
+                print("STDERR:", stderr)
 
 
 def main():
@@ -487,6 +527,11 @@ Examples:
   python start_qwen_churn_assistant.py --open       # Open WebUI in browser
   python start_qwen_churn_assistant.py --rebuild-model  # Rebuild custom churn model only
   python start_qwen_churn_assistant.py --cleanup-all  # Clean up everything including Docker volumes
+
+Architecture:
+  Base files: docker-compose.ollama.yml + docker-compose.webui.yml (CPU-optimized)
+  GPU mode: + docker-compose.gpu-override.yml (adds GPU acceleration)
+  Qwen churn: + docker-compose.qwen-churn-override.yml (adds churn-specific config)
         """
     )
     

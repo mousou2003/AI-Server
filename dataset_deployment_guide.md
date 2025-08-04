@@ -15,7 +15,7 @@ Your enhanced Docker Compose setup now includes dataset volumes that make CSV fi
 
 ### Option 1: Volume Mounting (Recommended)
 
-Your `docker-compose.qwen-churn.yml` now includes dataset volume mounts:
+Your `docker-compose.qwen-churn-override.yml` now includes dataset volume mounts:
 
 ```yaml
 # Ollama container - read-only access to datasets
@@ -128,18 +128,7 @@ CUST002,34,56.95,1937.3,One year,Mailed check,No
 - Support interactions (tickets, calls)
 - Product adoption (services used, upgrades)
 
-## Testing Dataset Preloading
-
-### Automatic Sample Generation
-
-Your OllamaManager can create a sample dataset:
-
-```python
-from ollama_manager import OllamaManager
-
-manager = OllamaManager()
-success = manager.preload_sample_dataset("workspace/churn_analysis", create_sample=True)
-```
+## Testing Dataset Access
 
 ### Manual Testing
 
@@ -149,9 +138,10 @@ success = manager.preload_sample_dataset("workspace/churn_analysis", create_samp
    - Upload your CSV file
    - Ask: "Can you analyze this customer churn data?"
 
-2. **Direct File Access**:
-   - Place CSV in `workspace/churn_analysis/`
+2. **Pre-loaded Dataset Access**:
+   - Place CSV files in `workspace/churn_analysis/`
    - Reference in conversation: "I have customer data in the datasets folder"
+   - The model will recognize and guide analysis of your data
 
 ## Integration with Custom Model
 

@@ -1,0 +1,36 @@
+# Open WebUI - Base Configuration (CPU-optimized by default)
+# Can connect to any Ollama or compatible API endpoint
+# Includes user management, memory, and tool features
+# Use docker-compose.gpu-override.yml for GPU acceleration
+
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main  # CPU-friendly image
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - WEBUI_NAME=${WEBUI_NAME:-Open WebUI}
+      # User access configuration
+      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-admin}
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
+      # Feature enablement
+      - ENABLE_MEMORY=${ENABLE_MEMORY:-true}
+      - ENABLE_TOOLS=${ENABLE_TOOLS:-true}
+      - TOOLS_FUNCTION_CALLING_ENABLED=${TOOLS_FUNCTION_CALLING_ENABLED:-true}
+    volumes:
+      - open-webui:/app/backend/data
+    restart: unless-stopped
+    mem_limit: ${WEBUI_MEM_LIMIT:-4g}
+    mem_reservation: ${WEBUI_MEM_RESERVATION:-2g}
+    networks:
+      - ai_network
+
+volumes:
+  open-webui:
+
+networks:
+  ai_network:
+    driver: bridge
+    external: true

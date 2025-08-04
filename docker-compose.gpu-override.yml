@@ -1,0 +1,42 @@
+# Universal GPU Override for All Services
+# Usage: docker compose -f <base-file> -f docker-compose.gpu-override.yml up -d
+# Adds GPU acceleration to any service that supports it
+# Works with any container names defined by script-specific overrides
+
+services:
+  # Standard Ollama service GPU overrides
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      # GPU-optimized settings
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_FLASH_ATTENTION=true
+    mem_limit: 32g
+    mem_reservation: 8g
+
+  # Standard Llama.cpp server GPU overrides
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda  # Use CUDA image
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - LLAMA_ARG_N_GPU_LAYERS=35  # Enable GPU layers
+      - LLAMA_ARG_NGL=1
+
+  # Standard WebUI GPU overrides
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:cuda  # Use CUDA image
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]

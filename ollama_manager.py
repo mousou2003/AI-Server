@@ -3,6 +3,7 @@ import requests
 import subprocess
 import docker
 from pathlib import Path
+from utility_manager import UtilityManager
 
 
 class OllamaManager:
@@ -52,16 +53,14 @@ class OllamaManager:
         for model in self.config["models"]:
             print(f"⬇️ Pulling {model}...")
             try:
-                cmd = f'powershell -Command "docker exec {self.config["name"]} ollama pull {model}"'
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, 
-                                      encoding='utf-8', errors='ignore', timeout=300)
+                cmd = f'docker exec {self.config["name"]} ollama pull {model}'
+                result = UtilityManager.run_subprocess(cmd, check=False, timeout=300)
                 
                 if result.returncode == 0:
                     print(f"✅ {model} successfully pulled")
                 else:
-                    check_cmd = f'powershell -Command "docker exec {self.config["name"]} ollama list"'
-                    check_result = subprocess.run(check_cmd, shell=True, capture_output=True, 
-                                                text=True, encoding='utf-8', errors='ignore')
+                    check_cmd = f'docker exec {self.config["name"]} ollama list'
+                    check_result = UtilityManager.run_subprocess(check_cmd, check=False)
                     if model.split(':')[0] in check_result.stdout:
                         print(f"✅ {model} already exists")
                     else:
@@ -166,8 +165,7 @@ class OllamaManager:
         """
         try:
             cmd = f'docker exec {self.config["name"]} ollama list'
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True,
-                                  encoding='utf-8', errors='ignore', timeout=30)
+            result = UtilityManager.run_subprocess(cmd, check=False, timeout=30)
             
             if result.returncode == 0 and model_name in result.stdout:
                 print(f"   ✅ Model {model_name} is available")
@@ -202,9 +200,9 @@ class OllamaManager:
             print(f"   ❌ Error listing models: {e}")
             return ""
     
-    def load_system_prompt_from_template(self, templates_dir, template_name="qwen_churn_system_prompt.template.md"):
+    def load_system_prompt_from_template(self, templates_dir, template_name="qwen_churn_system_prompt.template.json"):
         """
-        Load system prompt from template file
+        Load system prompt from template file (supports both JSON and Markdown)
         
         Args:
             templates_dir (Path): Path to templates directory
@@ -215,26 +213,51 @@ class OllamaManager:
         """
         prompt_file = Path(templates_dir) / template_name
         
-        # Read the system prompt template file
+        if not prompt_file.exists():
+            raise FileNotFoundError(f"Template file not found: {prompt_file}")
+        
+        # Read the template file
         with open(prompt_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Extract the prompt content (skip the markdown header)
-        lines = content.split('\n')
-        # Find the first line after the main title and start from there
-        start_idx = 0
-        for i, line in enumerate(lines):
-            if line.startswith('# ') and i == 0:
-                continue
-            elif line.strip() == '' and i <= 3:
-                continue
-            else:
-                start_idx = i
-                break
+        # Handle JSON template files
+        if template_name.endswith('.json'):
+            import json
+            try:
+                template_data = json.loads(content)
+                if 'system_prompt' in template_data:
+                    prompt_content = template_data['system_prompt']
+                    print(f"   ✅ Loaded system prompt from JSON template: {prompt_file}")
+                    return prompt_content
+                else:
+                    raise ValueError("JSON template missing 'system_prompt' field")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in template file: {e}")
         
-        prompt_content = '\n'.join(lines[start_idx:]).strip()
-        print(f"   ✅ Loaded system prompt: {prompt_file}")
-        return prompt_content
+        # Handle Markdown template files (legacy support)
+        elif template_name.endswith('.md'):
+            # Extract the prompt content (skip the markdown header)
+            lines = content.split('\n')
+            # Find the first line after the main title and start from there
+            start_idx = 0
+            for i, line in enumerate(lines):
+                if line.startswith('# ') and i == 0:
+                    continue
+                elif line.strip() == '' and i <= 3:
+                    continue
+                else:
+                    start_idx = i
+                    break
+            
+            prompt_content = '\n'.join(lines[start_idx:]).strip()
+            print(f"   ✅ Loaded system prompt from Markdown template: {prompt_file}")
+            return prompt_content
+        
+        else:
+            # Treat as plain text
+            prompt_content = content.strip()
+            print(f"   ✅ Loaded system prompt from text template: {prompt_file}")
+            return prompt_content
     
     def configure_specialized_model(self, base_model_name, system_prompt, models_dir, 
                                   custom_suffix="churn", temperature=0.3, top_k=40, 
@@ -337,7 +360,7 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         if specialized_models:
             self.config["models"] = specialized_models
     
-    def setup_models_directory(self, models_path="models/.ollama"):
+    def setup_models_directory(self, models_path=".ollama"):
         """
         Setup and create the models directory for Ollama
         
@@ -352,33 +375,21 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         return models_dir
     
     def setup_complete_infrastructure(self, project_name, 
-                                    models_path="models/.ollama",
-                                    datasets_path="workspace"):
+                                    models_path=".ollama"):
         """
-        Complete infrastructure setup for models and WebUI directories
+        Complete infrastructure setup for models directory
         
         Args:
-            webui_manager: WebUIManager instance for directory operations
-            project_name (str): Project name for subdirectories and memory files
+            project_name (str): Project name for organization
             models_path (str): Path to the models directory
-            workspace_path (str): Path to workspace directory
-            memory_path (str): Path to memory directory
-            templates_path (str): Path to templates directory
-            datasets_path (str): Path to datasets directory
         """
         # Setup models directory (Ollama-specific)
         self.setup_models_directory(models_path)
         
-        datasets_dir = Path(datasets_path,project_name)
-        
-        # Create datasets directory
-        datasets_dir.mkdir(parents=True, exist_ok=True)
-        print(f"   ✅ Created datasets directory: {datasets_dir}")
-        
 
     
     def setup_specialized_churn_model(self, base_model_name, 
-                                     template_name="qwen_churn_system_prompt.template.md",
+                                     template_name="qwen_churn_system_prompt.template.json",
                                      custom_suffix="churn", temperature=0.3, top_k=40, 
                                      top_p=0.9, repeat_penalty=1.1,
                                      templates_path="templates"):
@@ -420,52 +431,3 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         )
         
         return success, custom_model_name
-    
-    def preload_sample_dataset(self, datasets_path="workspace/churn_analysis", 
-                              create_sample=True):
-        """
-        Preload sample datasets for churn analysis
-        
-        Args:
-            datasets_path (str): Path to datasets directory
-            create_sample (bool): Whether to create a sample dataset if none exists
-            
-        Returns:
-            bool: True if datasets are available, False otherwise
-        """
-        datasets_dir = Path(datasets_path)
-        datasets_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Check for existing datasets
-        csv_files = list(datasets_dir.glob("*.csv"))
-        
-        if csv_files:
-            print(f"   ✅ Found {len(csv_files)} dataset(s) in {datasets_dir}")
-            for csv_file in csv_files:
-                print(f"      📊 {csv_file.name}")
-            return True
-        
-        if create_sample:
-            print(f"   📊 Creating sample churn dataset...")
-            sample_data = """customer_id,tenure,monthly_charges,total_charges,contract_type,payment_method,churn_status
-CUST001,12,29.85,358.2,Month-to-month,Electronic check,Yes
-CUST002,34,56.95,1937.3,One year,Mailed check,No
-CUST003,2,53.85,107.7,Month-to-month,Electronic check,Yes
-CUST004,45,42.30,1899.5,Two year,Bank transfer,No
-CUST005,8,70.70,565.6,Month-to-month,Credit card,No
-CUST006,22,99.65,2191.3,One year,Credit card,No
-CUST007,10,29.75,297.5,Month-to-month,Electronic check,Yes
-CUST008,28,84.80,2372.4,Two year,Bank transfer,No
-CUST009,7,56.15,393.05,Month-to-month,Mailed check,Yes
-CUST010,36,42.65,1535.4,Two year,Credit card,No"""
-            
-            sample_file = datasets_dir / "sample_churn_data.csv"
-            with open(sample_file, 'w', encoding='utf-8') as f:
-                f.write(sample_data)
-            
-            print(f"   ✅ Created sample dataset: {sample_file}")
-            print(f"   📝 Sample contains basic churn analysis fields")
-            return True
-        
-        print(f"   ⚠️  No datasets found in {datasets_dir}")
-        return False

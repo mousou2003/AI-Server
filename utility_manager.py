@@ -72,6 +72,57 @@ class UtilityManager:
         return str(compose_file)
     
     @staticmethod
+    def validate_compose_files(base_files, override_files=None):
+        """Validate multiple Docker Compose files exist"""
+        missing_files = []
+        
+        # Check base files (required)
+        for file_path in base_files:
+            if not Path(file_path).exists():
+                missing_files.append(file_path)
+                print(f"❌ Base file not found: {file_path}")
+            else:
+                print(f"✅ Base file found: {file_path}")
+        
+        # Check override files (optional)
+        if override_files:
+            for file_path in override_files:
+                if not Path(file_path).exists():
+                    print(f"⚠️  Override file not found: {file_path}")
+                else:
+                    print(f"✅ Override file found: {file_path}")
+        
+        if missing_files:
+            raise FileNotFoundError(f"Required Docker Compose files not found: {missing_files}")
+        
+        return True
+    
+    @staticmethod
+    def ensure_docker_network(network_name="ai_network"):
+        """Ensure Docker network exists, create if not"""
+        print(f"🌐 Ensuring Docker network exists: {network_name}")
+        try:
+            network_check = UtilityManager.run_subprocess(
+                f"docker network inspect {network_name}", 
+                check=False
+            )
+            
+            if network_check.returncode != 0:
+                print(f"   Creating network: {network_name}")
+                network_create = UtilityManager.run_subprocess(
+                    f"docker network create {network_name}",
+                    check=True
+                )
+                print(f"   ✅ Network created: {network_name}")
+            else:
+                print(f"   ✅ Network already exists: {network_name}")
+            return True
+        except Exception as e:
+            print(f"   ⚠️  Warning: Could not create network {network_name}: {e}")
+            print("   Services may not be able to communicate properly")
+            return False
+    
+    @staticmethod
     def cleanup_docker_volumes(volume_names, project_name):
         """Clean up Docker volumes for a project"""
         print("🗑️  Ensuring all related volumes are removed...")
@@ -129,3 +180,55 @@ class UtilityManager:
             return False
         
         return True
+    
+    @staticmethod
+    def build_compose_command(compose_files, project_name, action="up", additional_args=""):
+        """Build a docker compose command with multiple files"""
+        if isinstance(compose_files, str):
+            compose_files = [compose_files]
+        
+        # Build command
+        cmd_parts = ["docker", "compose"]
+        
+        if project_name:
+            cmd_parts.extend(["-p", project_name])
+            
+        for compose_file in compose_files:
+            cmd_parts.extend(["-f", str(compose_file)])
+        
+        cmd_parts.append(action)
+        if additional_args:
+            cmd_parts.extend(additional_args.split())
+            
+        return " ".join(cmd_parts)
+    
+    @staticmethod
+    def list_docker_containers(filter_pattern=None):
+        """List Docker containers, optionally filtered by name pattern"""
+        try:
+            cmd = "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+            if filter_pattern:
+                cmd += f" --filter name={filter_pattern}"
+            
+            result = UtilityManager.run_subprocess(cmd, check=False)
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                return "No containers found or Docker not available"
+        except Exception as e:
+            return f"Error listing containers: {e}"
+    
+    @staticmethod
+    def get_container_logs(container_name, lines=20):
+        """Get logs from a Docker container"""
+        try:
+            result = UtilityManager.run_subprocess(
+                f"docker logs --tail {lines} {container_name}",
+                check=False
+            )
+            if result.returncode == 0:
+                return result.stdout, result.stderr
+            else:
+                return None, f"Could not get logs: {result.stderr}"
+        except Exception as e:
+            return None, f"Error getting logs: {e}"

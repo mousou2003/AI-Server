@@ -1,0 +1,28 @@
+# Llama.cpp Server - Base Configuration (CPU-optimized by default)
+# Can be used independently or with other services
+# Use docker-compose.gpu-override.yml for GPU acceleration
+
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server  # CPU image by default
+    container_name: llama-server
+    environment:
+      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf}
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=11435
+      # CPU-only configuration by default
+      - LLAMA_ARG_N_GPU_LAYERS=0
+      - LLAMA_ARG_THREADS=8
+      - LLAMA_ARG_CTX_SIZE=32768  # Larger context for more data
+    volumes:
+      - ./models/.llama:/models
+    ports:
+      - "11435:11435"
+    restart: unless-stopped
+    networks:
+      - ai_network
+
+networks:
+  ai_network:
+    driver: bridge
+    external: true

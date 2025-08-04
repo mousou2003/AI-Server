@@ -114,8 +114,12 @@ templates/
 - **`readme.md`**: This comprehensive guide (single source of truth)
 
 ### ⚙️ **Configuration Files**
-- **`docker-compose.yml`**: Development mode GPU configuration
-- **`docker-compose.cpu.yml`**: Development mode CPU-only configuration
+- **`docker-compose.ollama.yml`**: Base Ollama service (CPU-optimized)
+- **`docker-compose.webui.yml`**: Base Open WebUI service
+- **`docker-compose.llama.yml`**: Base Llama.cpp server
+- **`docker-compose.gpu-override.yml`**: GPU acceleration overlay
+- **`docker-compose.qwen-churn-override.yml`**: Qwen Churn Assistant specialization
+- **`docker-compose.llama-webui-override.yml`**: Llama + WebUI combination
 - **`.gitignore`**: Excludes models, runtime files, preserves templates
 
 ---
@@ -215,7 +219,10 @@ This script will automatically:
 - **Ollama**: Secondary model backend on port 11434  
 - **Open WebUI**: Web interface on port 3000
 
-The script intelligently selects between `docker-compose.yml` (GPU mode) and `docker-compose.cpu.yml` (CPU mode) based on your configuration.
+The script uses a modular Docker Compose architecture:
+- **Base Services**: `docker-compose.ollama.yml`, `docker-compose.webui.yml`, `docker-compose.llama.yml`
+- **GPU Acceleration**: `docker-compose.gpu-override.yml` adds GPU support to base services
+- **Specializations**: Service-specific overrides like `docker-compose.qwen-churn-override.yml`
 
 **CPU vs GPU Mode:**
 - **GPU Mode**: Faster inference (~50+ tokens/sec), requires NVIDIA GPU with sufficient VRAM

@@ -1,11 +1,5 @@
-models
+.ollama
+.llama
+.datasets
 test-output
 __pycache__
-
-# Workspace directory (contains user uploaded files)
-workspace/
-
-# Keep memory directory in git but ignore user data
-memory/*.csv
-memory/*.json
-memory/sessions/
