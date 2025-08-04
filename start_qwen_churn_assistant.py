@@ -21,14 +21,10 @@ Requirements:
 
 import os
 import sys
-import docker
 import argparse
-import webbrowser
 import time
-import requests
 from subprocess import TimeoutExpired
 import tempfile
-import shutil
 from pathlib import Path
 
 # Import existing managers
@@ -71,6 +67,22 @@ class QwenChurnAssistantManager:
                 print("     Consider using the default 7B model for CPU mode")
             elif cpu_mode:
                 print("🖥️  CPU-only mode enabled")
+        
+        # Configure OllamaManager for our specific setup
+        self.ollama_manager = OllamaManager()
+        self.ollama_manager.setup_for_specialized_use(
+            container_name="ollama-qwen-churn",
+            specialized_models=[self.selected_model["name"]],
+            port=11434
+        )
+        
+        # Configure WebUIManager for our specific setup
+        self.webui_manager = WebUIManager()
+        self.webui_manager.config.update({
+            "name": "open-webui-qwen-churn",
+            "port": 3000,
+            "url": "http://localhost:3000"
+        })
             
         # Configuration
         self.config = {
@@ -82,335 +94,38 @@ class QwenChurnAssistantManager:
             "cpu_mode": cpu_mode
         }
         
-        # Create models directory if it doesn't exist
-        self.models_dir = Path("models/.ollama")
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+        # Setup complete infrastructure directories using OllamaManager
+        self.ollama_manager.setup_complete_infrastructure(
+            webui_manager=self.webui_manager,
+            project_name="churn"
+        )
         
-        # Create staging directory for temporary files
-        self.staging_dir = Path("staging")
-        self.staging_dir.mkdir(exist_ok=True)
-        
-        # Create workspace and memory directories
-        self.workspace_dir = Path("workspace")
-        self.memory_dir = Path("memory")
-        self.templates_dir = Path("templates")
-        self.create_persistent_directories()
-        
-    def check_system_requirements(self):
-        """Check if system meets requirements for the selected model"""
-        print("🔍 Checking system requirements...")
-        
-        try:
-            # Check if Docker is available
-            docker_client = docker.from_env()
-            print("✅ Docker is available")
-            
-            # Check if NVIDIA GPU is available
-            try:
-                result = self.utility_manager.run_subprocess('nvidia-smi', check=False)
-                if result.returncode == 0:
-                    print("✅ NVIDIA GPU detected")
-                    # Try to extract VRAM info (basic check)
-                    if 'MiB' in result.stdout:
-                        print("✅ GPU memory information available")
-                else:
-                    print("⚠️  NVIDIA GPU not detected or nvidia-smi not available")
-                    print("   Ollama will run in CPU mode (slower performance)")
-            except Exception:
-                print("⚠️  nvidia-smi not found - GPU acceleration may not be available")
-                
-        except Exception as e:
-            print(f"❌ Docker not available: {e}")
-            return False
-            
-        print(f"📋 Selected Model: {self.config['model_name']}")
-        print(f"   {self.config['description']}")
-        print(f"   VRAM Requirement: {self.selected_model['vram_requirement']}")
-        print()
-        
-        return True
-    
-    def create_persistent_directories(self):
-        """Create workspace and memory directories for Open WebUI"""
-        # Create workspace directory for file analysis
-        self.workspace_dir.mkdir(exist_ok=True)
-        churn_workspace = self.workspace_dir / "churn_analysis"
-        churn_workspace.mkdir(exist_ok=True)
-        
-        # Create memory directory
-        self.memory_dir.mkdir(exist_ok=True)
-        
-        # Create initial memory file from template if it doesn't exist
-        memory_file = self.memory_dir / "churn_qwen.md"
-        if not memory_file.exists():
-            self._create_memory_from_template(memory_file)
-        
-        print(f"   ✅ Created workspace: {churn_workspace}")
-        print(f"   ✅ Created memory: {memory_file}")
-    
-    def _create_memory_from_template(self, memory_file):
-        """Create memory file from template"""
-        template_file = self.templates_dir / "churn_memory_template.md"
-        
-        # Copy from template
-        with open(template_file, 'r', encoding='utf-8') as f:
-            template_content = f.read()
-        
-        with open(memory_file, 'w', encoding='utf-8') as f:
-            f.write(template_content)
-        
-        print(f"   ✅ Memory created from template: {template_file}")
-    
-    def create_docker_compose(self):
-        """Create a specialized docker-compose file for Qwen Churn Assistant from template"""
-        # Choose template based on CPU/GPU mode
-        if self.config['cpu_mode']:
-            template_file = self.templates_dir / "docker-compose.qwen-churn.cpu.template.yml"
+        # Select appropriate docker-compose file based on mode
+        if cpu_mode:
+            self.compose_file = Path("docker-compose.qwen-churn.cpu.yml")
+            print(f"🖥️  Using CPU-optimized compose file: {self.compose_file}")
         else:
-            template_file = self.templates_dir / "docker-compose.qwen-churn.template.yml"
+            self.compose_file = Path("docker-compose.qwen-churn.yml")
+            print(f"🚀 Using GPU-accelerated compose file: {self.compose_file}")
         
-        # Load template and substitute variables
-        with open(template_file, 'r', encoding='utf-8') as f:
-            template_content = f.read()
-        
-        # Substitute template variables
-        compose_content = template_content.replace('{{OLLAMA_PORT}}', str(self.config['ollama_port']))
-        compose_content = compose_content.replace('{{WEBUI_PORT}}', str(self.config['webui_port']))
-        
-        compose_file = self.staging_dir / "docker-compose.qwen-churn.yml"
-        with open(compose_file, 'w', encoding='utf-8') as f:
-            f.write(compose_content)
-            
-        mode_info = "CPU-only" if self.config['cpu_mode'] else "GPU-accelerated"
-        print(f"   ✅ Docker Compose created from template: {template_file} ({mode_info})")
-        return str(compose_file)
-    
-    def pull_qwen_model(self):
-        """Pull the selected Qwen model into Ollama"""
-        print(f"🤖 Pulling Qwen model: {self.config['model_name']}")
-        print("   This may take several minutes depending on your internet connection...")
-        print(f"   Model: {self.selected_model['description']}")
-        print(f"   Size: {'~3GB' if '7b' in self.config['model_name'] else '~20GB'}")
-        
-        try:
-            # Pull model using docker exec
-            cmd = f'docker exec ollama-qwen-churn ollama pull {self.config["model_name"]}'
-            print(f"   Running: {cmd}")
-            
-            # Use longer timeout for 32B model
-            timeout = 3600 if '32b' in self.config['model_name'] else 1800  # 60min vs 30min
-            
-            result = self.utility_manager.run_subprocess(cmd, check=False, timeout=timeout)
-            
-            if result.returncode == 0:
-                print(f"✅ Successfully pulled {self.config['model_name']}")
-                return True
-            else:
-                print(f"❌ Failed to pull {self.config['model_name']}")
-                print(f"   Error: {result.stderr}")
-                if '32b' in self.config['model_name'] and self.cpu_mode:
-                    print("\n💡 Suggestion: Try using the default 7B model for CPU mode:")
-                    print(f"   python {sys.argv[0]} --cpu")
-                else:
-                    print("\n💡 Suggestion: Check your internet connection and try again")
-                return False
-                
-        except TimeoutExpired:
-            timeout_min = timeout // 60
-            print(f"⏰ Model pull timed out ({timeout_min} minutes)")
-            if '32b' in self.config['model_name']:
-                print("   The 32B model is very large. Consider using the 7B model for CPU mode.")
-            return False
-        except Exception as e:
-            print(f"❌ Error pulling model: {e}")
-            return False
-    
     def wait_for_services(self):
-        """Wait for both Ollama and Open WebUI to be ready"""
+        """Wait for both Ollama and Open WebUI to be ready using managers"""
         print("⏳ Waiting for services to start...")
         
-        # Wait for Ollama
-        print("   Checking Ollama...")
-        ollama_ready = False
-        for i in range(120):  # 120 second timeout (2 minutes)
-            try:
-                response = requests.get(f"http://localhost:{self.config['ollama_port']}/api/tags", timeout=3)
-                if response.status_code == 200:
-                    print("   ✅ Ollama is ready")
-                    ollama_ready = True
-                    break
-            except requests.RequestException:
-                pass
-            
-            # Print progress every 15 seconds
-            if i > 0 and i % 15 == 0:
-                print(f"   ⏳ Still waiting for Ollama... ({i}s elapsed)")
-            
-            time.sleep(1)
+        # Use OllamaManager's wait_for_api method (already configured for our container)
+        ollama_ready = self.ollama_manager.wait_for_api(retries=120)
         
         if not ollama_ready:
-            print("   ❌ Ollama failed to start within timeout")
             print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
             return False
         
-        # Wait for Open WebUI
-        print("   Checking Open WebUI...")
-        webui_ready = False
-        for i in range(60):  # 60 second timeout
-            try:
-                response = requests.get(f"http://localhost:{self.config['webui_port']}", timeout=3)
-                if response.status_code == 200:
-                    print("   ✅ Open WebUI is ready")
-                    webui_ready = True
-                    break
-            except requests.RequestException:
-                pass
-            
-            # Print progress every 15 seconds
-            if i > 0 and i % 15 == 0:
-                print(f"   ⏳ Still waiting for Open WebUI... ({i}s elapsed)")
-                
-            time.sleep(1)
+        # Use WebUIManager's wait_for_api_with_progress method
+        webui_ready = self.webui_manager.wait_for_api_with_progress(retries=60, progress_interval=15)
         
         if not webui_ready:
-            print("   ❌ Open WebUI failed to start within timeout")
-            print("   💡 Try checking container logs: docker logs open-webui-qwen-churn")
             return False
             
         return True
-    
-    def create_churn_analysis_prompt(self):
-        """Load the churn analysis system prompt from the template file"""
-        prompt_file = self.templates_dir / "qwen_churn_system_prompt.template.md"
-        
-        # Read the system prompt template file
-        with open(prompt_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Extract the prompt content (skip the markdown header)
-        lines = content.split('\n')
-        # Find the first line after the main title and start from there
-        start_idx = 0
-        for i, line in enumerate(lines):
-            if line.startswith('# ') and i == 0:
-                continue
-            elif line.strip() == '' and i <= 3:
-                continue
-            else:
-                start_idx = i
-                break
-        
-        prompt_content = '\n'.join(lines[start_idx:]).strip()
-        print(f"   ✅ Loaded system prompt: {prompt_file}")
-        return prompt_content
-    
-    def configure_model_with_prompt(self, system_prompt):
-        """Configure the Qwen model with the churn analysis system prompt"""
-        print("🔧 Configuring model with churn analysis prompt...")
-        
-        # Use staging directory for temporary files
-        modelfile_path = self.staging_dir / "Modelfile.qwen-churn"
-        
-        try:
-            # Create a Modelfile for Ollama with the system prompt
-            modelfile_content = f'''FROM {self.config["model_name"]}
-
-# Set parameters optimized for churn analysis
-PARAMETER temperature 0.3
-PARAMETER top_k 40
-PARAMETER top_p 0.9
-PARAMETER repeat_penalty 1.1
-
-# System prompt for churn analysis
-SYSTEM """{system_prompt}"""
-
-# Template for consistent responses
-TEMPLATE """{{ if .System }}<|im_start|>system
-{{ .System }}<|im_end|>
-{{ end }}{{ if .Prompt }}<|im_start|>user
-{{ .Prompt }}<|im_end|>
-{{ end }}<|im_start|>assistant
-"""
-'''
-            
-            # Save the Modelfile in staging directory
-            with open(modelfile_path, 'w') as f:
-                f.write(modelfile_content)
-            
-            print(f"   ✅ Created Modelfile: {modelfile_path}")
-            
-            # Create the customized model in Ollama
-            custom_model_name = f"{self.config['model_name']}-churn"
-            cmd = f'docker exec ollama-qwen-churn ollama create {custom_model_name} -f /app/Modelfile.qwen-churn'
-            
-            # Copy Modelfile to container first
-            copy_cmd = f'docker cp {modelfile_path} ollama-qwen-churn:/app/Modelfile.qwen-churn'
-            copy_result = self.utility_manager.run_subprocess(copy_cmd, check=False)
-            
-            if copy_result.returncode != 0:
-                print(f"   ⚠️  Could not copy Modelfile to container: {copy_result.stderr}")
-                return False
-            
-            # Create the custom model
-            result = self.utility_manager.run_subprocess(cmd, check=False, timeout=300)
-            
-            if result.returncode == 0:
-                print(f"   ✅ Created custom model: {custom_model_name}")
-                # Update config to use the custom model
-                self.config["custom_model_name"] = custom_model_name
-                return True
-            else:
-                print(f"   ⚠️  Could not create custom model: {result.stderr}")
-                print("   The base model will be used without the custom prompt")
-                return False
-                
-        except TimeoutExpired:
-            print("   ⏰ Model configuration timed out")
-            return False
-        except Exception as e:
-            print(f"   ❌ Error configuring model: {e}")
-            return False
-    
-    def verify_custom_model(self):
-        """Verify that the custom churn analysis model is available"""
-        if 'custom_model_name' not in self.config:
-            return False
-            
-        try:
-            # List models in Ollama to verify custom model exists
-            cmd = 'docker exec ollama-qwen-churn ollama list'
-            result = self.utility_manager.run_subprocess(cmd, check=False, timeout=30)
-            
-            if result.returncode == 0 and self.config['custom_model_name'] in result.stdout:
-                print(f"   ✅ Custom model {self.config['custom_model_name']} is available")
-                return True
-            else:
-                print(f"   ⚠️  Custom model {self.config['custom_model_name']} not found in Ollama")
-                return False
-                
-        except Exception as e:
-            print(f"   ❌ Error verifying custom model: {e}")
-            return False
-    
-    def cleanup_staging(self):
-        """Clean up the staging directory and temporary files (preserve memory and workspace)"""
-        try:
-            if self.staging_dir.exists():
-                # Only remove files in staging directory, not the persistent directories
-                for item in self.staging_dir.iterdir():
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-                # Remove staging directory itself if empty
-                try:
-                    self.staging_dir.rmdir()
-                    print("🧹 Cleaned up staging directory")
-                except OSError:
-                    # Directory not empty, that's fine
-                    print("🧹 Cleaned up staging files")
-        except Exception as e:
-            print(f"⚠️  Could not clean up staging directory: {e}")
     
     def cleanup_all(self, remove_volumes=False):
         """Comprehensive cleanup including containers, images, and optionally volumes"""
@@ -421,33 +136,15 @@ TEMPLATE """{{ if .System }}<|im_start|>system
         
         # If we didn't remove volumes via compose, try manual removal
         if remove_volumes:
-            print("🗑️  Ensuring all related volumes are removed...")
             volume_names = [
                 "qwen-churn-assistant-data",
                 "qwen-churn-assistant-memory", 
                 "qwen-churn-assistant-workspace"
             ]
             
-            for volume_name in volume_names:
-                try:
-                    result = self.utility_manager.run_subprocess(
-                        f"docker volume rm {volume_name}",
-                        check=False
-                    )
-                    if result.returncode == 0:
-                        print(f"   ✅ Removed volume: {volume_name}")
-                    else:
-                        # Volume may have been removed by compose down -v
-                        print(f"   ℹ️  Volume {volume_name} already removed or doesn't exist")
-                except Exception as e:
-                    print(f"   ❌ Error removing volume {volume_name}: {e}")
+            self.utility_manager.cleanup_docker_volumes(volume_names, "qwen-churn-assistant")
         
         print("✅ Comprehensive cleanup completed")
-    
-    def ensure_staging_cleanup(self):
-        """Ensure staging directory is cleaned up on exit"""
-        import atexit
-        atexit.register(self.cleanup_staging)
     
     def start_infrastructure(self):
         """Start the complete Qwen Churn Assistant infrastructure"""
@@ -455,18 +152,16 @@ TEMPLATE """{{ if .System }}<|im_start|>system
         print(f"🚀 Starting Qwen Churn Assistant Infrastructure ({mode_info})...")
         print("=" * 60)
         
-        # Set up cleanup for staging directory
-        self.ensure_staging_cleanup()
-        
         # Check system requirements
-        if not self.check_system_requirements():
+        if not self.utility_manager.check_system_requirements(
+            model_name=self.config['model_name'],
+            model_description=self.config['description'],
+            vram_requirement=self.selected_model['vram_requirement']
+        ):
             return False
         
-        # Create docker-compose file
-        compose_file = self.create_docker_compose()
-        
-        # Create system prompt
-        system_prompt = self.create_churn_analysis_prompt()
+        # Get docker-compose file path
+        compose_file = self.utility_manager.validate_docker_compose_file(str(self.compose_file))
         
         # Start services
         print("🐳 Starting Docker containers...")
@@ -505,19 +200,52 @@ TEMPLATE """{{ if .System }}<|im_start|>system
         if not self.wait_for_services():
             return False
         
-        # Pull Qwen model
-        model_pulled = self.pull_qwen_model()
+        # Pull Qwen model using OllamaManager
+        print(f"🤖 Pulling Qwen model: {self.config['model_name']}")
+        print("   This may take several minutes depending on your internet connection...")
+        print(f"   Model: {self.selected_model['description']}")
+        print(f"   Size: {'~3GB' if '7b' in self.config['model_name'] else '~20GB'}")
+        
+        try:
+            self.ollama_manager.pull_models()
+            model_pulled = True
+        except Exception as e:
+            print(f"❌ Error pulling model via OllamaManager: {e}")
+            if '32b' in self.config['model_name'] and self.cpu_mode:
+                print("\n💡 Suggestion: Try using the default 7B model for CPU mode:")
+                print(f"   python {sys.argv[0]} --cpu")
+            model_pulled = False
+            
         if not model_pulled:
             print("⚠️  Model pull failed, but services are running")
             print("   You can try pulling the model manually later")
             return False
         
-        # Configure model with system prompt
-        prompt_configured = self.configure_model_with_prompt(system_prompt)
+        # Check if custom churn model already exists, create if not
+        expected_custom_model_name = f"{self.config['model_name']}-churn"
+        print(f"🔍 Checking if custom churn model exists: {expected_custom_model_name}")
         
-        # Verify custom model if created
+        custom_model_exists = self.ollama_manager.verify_model_exists(expected_custom_model_name)
+        
+        if custom_model_exists:
+            print(f"   ✅ Custom model already exists: {expected_custom_model_name}")
+            prompt_configured = True
+            custom_model_name = expected_custom_model_name
+        else:
+            print(f"   🔧 Custom model not found, creating: {expected_custom_model_name}")
+            # Configure model with system prompt using OllamaManager
+            prompt_configured, custom_model_name = self.ollama_manager.setup_specialized_churn_model(
+                base_model_name=self.config["model_name"]
+            )
+            
+            if prompt_configured:
+                print(f"   ✅ Successfully created custom model: {custom_model_name}")
+            else:
+                print(f"   ⚠️  Failed to create custom model, will use base model")
+        
+        # Update config if custom model is available
         if prompt_configured:
-            self.verify_custom_model()
+            self.config["custom_model_name"] = custom_model_name
         
         # Success message
         mode_info = "CPU-only" if self.config['cpu_mode'] else "GPU-accelerated"
@@ -560,10 +288,8 @@ TEMPLATE """{{ if .System }}<|im_start|>system
         """
         print("🛑 Stopping Qwen Churn Assistant Infrastructure...")
         
-        compose_file = self.staging_dir / "docker-compose.qwen-churn.yml"
-        
         # Build the docker compose down command
-        down_cmd = f"docker compose -p qwen-churn-assistant -f {compose_file} down"
+        down_cmd = f"docker compose -p qwen-churn-assistant -f {self.compose_file} down"
         if remove_volumes:
             down_cmd += " -v"
             print("🗑️  Also removing Docker volumes...")
@@ -581,53 +307,152 @@ TEMPLATE """{{ if .System }}<|im_start|>system
                 
         except Exception as e:
             print(f"❌ Error stopping infrastructure: {e}")
-        
-        # Clean up staging directory only (preserve memory and workspace)
-        self.cleanup_staging()
     
     def status(self):
-        """Check the status of the infrastructure"""
-        print("📊 Qwen Churn Assistant Status")
-        print("=" * 40)
+        """Check the status of the infrastructure using managers"""
+        mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+        print(f"📊 Qwen Churn Assistant Status ({mode_info})")
+        print("=" * 50)
+        print(f"🐳 Compose file: {self.compose_file}")
+        print(f"⚡ Mode: {mode_info}")
+        print(f"🤖 Model: {self.config['model_name']}")
+        print()
         
         try:
-            client = docker.from_env()
+            # Check containers using manager container names
+            containers = [self.ollama_manager.config["name"], self.webui_manager.config["name"]]
+            self.utility_manager.check_container_status(containers)
             
-            # Check containers
-            containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
-            for container_name in containers:
-                try:
-                    container = client.containers.get(container_name)
-                    status = container.status
-                    print(f"🐳 {container_name}: {status}")
-                except docker.errors.NotFound:
-                    print(f"🐳 {container_name}: Not found")
+            # Check services using WebUIManager
+            print()
             
-            # Check services
-            services = [
-                ("Ollama API", f"http://localhost:{self.config['ollama_port']}/api/tags"),
-                ("Open WebUI", f"http://localhost:{self.config['webui_port']}")
-            ]
+            # Check Ollama API using OllamaManager
+            is_running, status_message = self.ollama_manager.get_api_status(self.config['ollama_port'])
+            print(status_message)
             
-            for service_name, url in services:
-                try:
-                    response = requests.get(url, timeout=2)
-                    if response.status_code == 200:
-                        print(f"🌐 {service_name}: ✅ Running")
-                    else:
-                        print(f"🌐 {service_name}: ⚠️  Responding with status {response.status_code}")
-                except requests.RequestException:
-                    print(f"🌐 {service_name}: ❌ Not responding")
+            # Check WebUI using WebUIManager
+            service_name, url, is_running = self.webui_manager.get_status_info()
+            if is_running:
+                print(f"🌐 {service_name}: ✅ Running")
+            else:
+                print(f"🌐 {service_name}: ❌ Not responding")
                     
         except Exception as e:
             print(f"❌ Error checking status: {e}")
 
+    def rebuild_custom_model(self):
+        """Rebuild the custom churn model, removing existing one first"""
+        mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+        print(f"🔧 Rebuilding Custom Churn Model ({mode_info})")
+        print("=" * 50)
+        
+        # Check if Ollama is running
+        print("🔍 Checking Ollama service status...")
+        is_running, status_message = self.ollama_manager.get_api_status(self.config['ollama_port'])
+        
+        if not is_running:
+            print("❌ Ollama service is not running!")
+            print("💡 Please start the infrastructure first:")
+            print(f"   python {sys.argv[0]} --cpu" if self.cpu_mode else f"   python {sys.argv[0]}")
+            return False
+        
+        print("✅ Ollama service is available")
+        
+        # Check if base model exists
+        print(f"🔍 Checking base model: {self.config['model_name']}")
+        base_model_exists = self.ollama_manager.verify_model_exists(self.config["model_name"])
+        
+        if not base_model_exists:
+            print(f"❌ Base model '{self.config['model_name']}' not found!")
+            print("💡 Please pull the base model first:")
+            print(f"   python {sys.argv[0]} --cpu" if self.cpu_mode else f"   python {sys.argv[0]}")
+            return False
+        
+        print(f"✅ Base model '{self.config['model_name']}' is available")
+        
+        # Check if custom model already exists and remove it
+        expected_custom_model_name = f"{self.config['model_name']}-churn"
+        print(f"🔍 Checking for existing custom model: {expected_custom_model_name}")
+        
+        custom_model_exists = self.ollama_manager.verify_model_exists(expected_custom_model_name)
+        
+        if custom_model_exists:
+            print(f"🗑️  Removing existing custom model: {expected_custom_model_name}")
+            try:
+                remove_cmd = f"docker exec {self.ollama_manager.config['name']} ollama rm {expected_custom_model_name}"
+                result = self.utility_manager.run_subprocess(remove_cmd, check=False)
+                
+                if result.returncode == 0:
+                    print(f"   ✅ Successfully removed existing custom model")
+                else:
+                    print(f"   ⚠️  Warning: Could not remove existing model: {result.stderr}")
+                    print(f"   Continuing with creation anyway...")
+                    
+            except Exception as e:
+                print(f"   ⚠️  Warning: Error removing existing model: {e}")
+                print(f"   Continuing with creation anyway...")
+        else:
+            print(f"   ℹ️  No existing custom model found")
+        
+        # Create the new custom model
+        print(f"🔧 Creating new custom churn model: {expected_custom_model_name}")
+        print("   This will configure the model with specialized churn analysis prompt...")
+        
+        try:
+            prompt_configured, custom_model_name = self.ollama_manager.setup_specialized_churn_model(
+                base_model_name=self.config["model_name"]
+            )
+            
+            if prompt_configured:
+                print(f"✅ Successfully created custom model: {custom_model_name}")
+                
+                # Update config
+                self.config["custom_model_name"] = custom_model_name
+                
+                # Verify the model exists
+                print(f"🔍 Verifying custom model creation...")
+                model_verified = self.ollama_manager.verify_model_exists(custom_model_name)
+                
+                if model_verified:
+                    print(f"✅ Custom model verified: {custom_model_name}")
+                    
+                    # List all models to show current state
+                    print(f"\n📋 Current models in Ollama:")
+                    try:
+                        models = self.ollama_manager.list_models()
+                        if isinstance(models, list):
+                            for model in models:
+                                if "churn" in model:
+                                    print(f"   🎯 {model} (custom)")
+                                else:
+                                    print(f"   - {model}")
+                        else:
+                            print(f"   {models}")
+                    except Exception as e:
+                        print(f"   ⚠️  Could not list models: {e}")
+                    
+                    print(f"\n🎉 Custom model rebuild completed successfully!")
+                    print(f"💡 You can now use '{custom_model_name}' in the WebUI")
+                    return True
+                else:
+                    print(f"❌ Custom model creation verification failed")
+                    return False
+            else:
+                print(f"❌ Failed to create custom model")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error creating custom model: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     def show_logs(self):
-        """Show container logs for troubleshooting"""
+        """Show container logs for troubleshooting using manager container names"""
         print("📋 Container Logs")
         print("=" * 40)
         
-        containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
+        containers = [self.ollama_manager.config["name"], self.webui_manager.config["name"]]
         
         for container_name in containers:
             print(f"\n🐳 {container_name} logs (last 20 lines):")
@@ -661,7 +486,7 @@ Examples:
   python start_qwen_churn_assistant.py --status     # Check status
   python start_qwen_churn_assistant.py --logs       # Show container logs
   python start_qwen_churn_assistant.py --open       # Open WebUI in browser
-  python start_qwen_churn_assistant.py --cleanup    # Clean up temporary files only
+  python start_qwen_churn_assistant.py --rebuild-model  # Rebuild custom churn model only
   python start_qwen_churn_assistant.py --cleanup-all  # Clean up everything including Docker volumes
         """
     )
@@ -678,8 +503,8 @@ Examples:
                        help='Show container logs for troubleshooting')
     parser.add_argument('--open', action='store_true',
                        help='Open WebUI in default browser')
-    parser.add_argument('--cleanup', action='store_true',
-                       help='Clean up staging directory and temporary files')
+    parser.add_argument('--rebuild-model', action='store_true',
+                       help='Rebuild the custom churn model (requires running infrastructure)')
     parser.add_argument('--cleanup-all', action='store_true',
                        help='Comprehensive cleanup including Docker volumes (WARNING: removes all churn assistant data)')
     
@@ -695,11 +520,12 @@ Examples:
     elif args.logs:
         manager.show_logs()
     elif args.open:
-        webbrowser.open(f"http://localhost:{manager.config['webui_port']}")
-        print(f"🌐 Opening WebUI: http://localhost:{manager.config['webui_port']}")
-    elif args.cleanup:
-        manager.cleanup_staging()
-        print("🧹 Staging cleanup completed")
+        manager.webui_manager.open_in_browser()
+    elif args.rebuild_model:
+        success = manager.rebuild_custom_model()
+        if not success:
+            print("❌ Failed to rebuild custom model")
+            sys.exit(1)
     elif args.cleanup_all:
         print("⚠️  WARNING: This will remove ALL churn assistant data including Docker volumes!")
         try:
@@ -715,11 +541,11 @@ Examples:
         success = manager.start_infrastructure()
         
         if success:
-            # Optionally open browser
+            # Optionally open browser using WebUIManager
             try:
                 response = input("\n🌐 Would you like to open the WebUI in your browser? (y/N): ")
                 if response.lower() in ['y', 'yes']:
-                    webbrowser.open(f"http://localhost:{manager.config['webui_port']}")
+                    manager.webui_manager.open_in_browser()
             except KeyboardInterrupt:
                 print("\n👋 Setup complete!")
         else:

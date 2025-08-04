@@ -1,5 +1,4 @@
 import os
-import docker
 import argparse
 import sys
 import webbrowser
@@ -47,13 +46,9 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     print(f"🚀 Starting llama.cpp + Open WebUI stack ({'CPU mode' if cpu_only else 'GPU mode'})...")
     UtilityManager.run_subprocess(f"docker compose -f {compose_file} up -d", show_output=True)
 
-    client = docker.from_env()
-    for name in ["llama-server", "ollama", "open-webui"]:
-        try:
-            client.containers.get(name).restart()
-            print(f"🔄 Restarted container: {name}")
-        except docker.errors.NotFound:
-            print(f"⚠️ Container not found: {name}")
+    # Restart containers to ensure they're fresh
+    container_names = ["llama-server", "ollama", "open-webui"]
+    UtilityManager.restart_containers(container_names)
 
     # Wait for services to be ready
     webui_manager.wait_for_api()

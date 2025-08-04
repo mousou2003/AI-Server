@@ -107,7 +107,6 @@ templates/
 
 ### 📁 **Runtime Directories**
 - **`models/`**: Downloaded model files (auto-created, gitignored)
-- **`staging/`**: Temporary generated files (auto-created, auto-cleaned)
 - **`memory/`**: Persistent conversation memory (created from templates)
 - **`workspace/`**: File analysis workspace (persistent, user data)
 
@@ -327,7 +326,7 @@ This project pioneered a **template-based approach** to AI infrastructure deploy
 ### 🎯 **Benefits**
 - **� Maintainable**: All configuration in version-controlled templates
 - **🚀 Scalable**: Easy to add new AI modes and configurations  
-- **🧹 Clean**: Clear separation between templates, staging, and runtime
+- **🧹 Clean**: Clear separation between templates and runtime
 - **⚙️ Flexible**: Support for different hardware modes (CPU/GPU)
 - **📦 Portable**: Templates work across different environments
 
@@ -343,8 +342,6 @@ This project pioneered a **template-based approach** to AI infrastructure deploy
 ```
 Template Files (version controlled)
     ↓ (read by managers)
-Staging Directory (temporary substituted files)  
-    ↓ (deployed to containers)
 Runtime Environment (active configuration)
     ↓ (cleanup on exit)
 Clean State (templates preserved)
@@ -538,7 +535,6 @@ python start_qwen_churn_assistant.py --cleanup-all
 - **Persistent volume issues**: Use `--cleanup-all` to remove all Docker volumes and start fresh
 
 **Cleanup Options:**
-- **`--cleanup`**: Removes only temporary staging files (safe, preserves your data)
 - **`--cleanup-all`**: Removes everything including Docker volumes (⚠️ **WARNING**: deletes all conversation history and WebUI settings)
 
 ### 💡 **Best Practices**
