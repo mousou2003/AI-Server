@@ -32,11 +32,23 @@ services:
       - "3000:8080"
     environment:
       - OLLAMA_BASE_URL=http://ollama-qwen:11434
+  #     - DEFAULT_USER_ROLE=admin    # First user becomes admin (needed for file uploads & model management)
+  #     - ENABLE_SIGNUP=true         # Allow account creation (required for first-time setup)
+  #     # Feature enablement
+  #     - ENABLE_MEMORY=true         # Enable conversation memory for business analysis context
+  #     - ENABLE_TOOLS=true          # Enable file upload and analysis tools
+  #     - TOOLS_FUNCTION_CALLING_ENABLED=true  # Allow AI to use tools for data analysis
+  #     # CPU mode specific settings
+  #     - ENABLE_RAG_HYBRID_SEARCH=false  # Disable resource-intensive features for CPU mode
     depends_on:
       - ollama-qwen
+  #       condition: service_healthy
     volumes:
       - qwen-churn-webui:/app/backend/data
     restart: unless-stopped
+  #   # Memory limits for WebUI in CPU mode
+  #   mem_limit: 4g
+  #   mem_reservation: 2g
 
 volumes:
   qwen-churn-webui:
