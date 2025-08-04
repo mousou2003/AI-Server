@@ -1,0 +1,40 @@
+# Qwen Churn Assistant Configuration
+# This file centralizes all configuration to avoid duplication between Docker Compose and Python code
+
+project:
+  name: "qwen-churn-assistant"
+  description: "Qwen Churn Assistant Infrastructure"
+
+containers:
+  ollama:
+    name: "ollama-qwen-churn"
+    port: 11434
+    
+  webui:
+    name: "open-webui-qwen-churn"
+    port: 3000
+    external_port: 3000
+
+models:
+  cpu_small:
+    name: "qwen2.5-coder:7b"
+    description: "Qwen2.5-Coder-7B-Instruct - Optimized for CPU churn analysis"
+    vram_requirement: "8GB+ RAM (CPU mode)"
+    size: "~3GB"
+    
+  gpu_large:
+    name: "qwen2.5-coder:32b"
+    description: "Qwen2.5-Coder-32B-Instruct - Comprehensive churn analysis model"
+    vram_requirement: "24GB+ VRAM (GPU mode) or 32GB+ RAM (CPU mode)"
+    size: "~20GB"
+
+compose_files:
+  base:
+    - "docker-compose.ollama.yml"
+    - "docker-compose.webui.yml"
+  overrides:
+    gpu: "docker-compose.gpu-override.yml"
+    qwen: "docker-compose.qwen-churn-override.yml"
+
+volumes:
+  - "qwen-churn-assistant-data"
