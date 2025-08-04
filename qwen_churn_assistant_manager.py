@@ -25,7 +25,6 @@ from pathlib import Path
 from utility_manager import UtilityManager
 from ollama_manager import OllamaManager
 from webui_manager import WebUIManager
-from qwen_config_loader import QwenConfig
 
 
 class QwenChurnAssistantManager:
@@ -41,49 +40,34 @@ class QwenChurnAssistantManager:
         self.large_model = large_model
         self.utility_manager = UtilityManager()
         
-        # Load centralized configuration
-        self.config_loader = QwenConfig()
-        
-        # Get model configuration from config file
-        self.selected_model = self.config_loader.get_model_config(cpu_mode, large_model)
-        
-        # Display mode information
+        # Qwen model selection for churn analysis
         if cpu_mode and not large_model:
+            # Use smaller model for CPU mode (much faster)
+            self.model_name = "qwen2.5-coder:7b"
             print("🖥️  CPU-only mode enabled - using 7B model for better performance")
-        elif cpu_mode and large_model:
-            print("🖥️  CPU-only mode with 32B model - this will be very slow!")
-            print("     Consider using the default 7B model for CPU mode")
-        elif cpu_mode:
-            print("🖥️  CPU-only mode enabled")
-        
-        # Get container configurations
-        ollama_config = self.config_loader.get_container_config('ollama')
-        webui_config = self.config_loader.get_container_config('webui')
+        else:
+            # Use full model for GPU mode or when explicitly requested
+            self.model_name = "qwen2.5-coder:32b"
+            if cpu_mode and large_model:
+                print("🖥️  CPU-only mode with 32B model - this will be very slow!")
+                print("     Consider using the default 7B model for CPU mode")
+            elif cpu_mode:
+                print("🖥️  CPU-only mode enabled")
         
         # Configure OllamaManager for our specific setup
         self.ollama_manager = OllamaManager()
         self.ollama_manager.setup_for_specialized_use(
-            container_name=ollama_config['name'],
-            specialized_models=[self.selected_model["name"]],
-            port=ollama_config['port']
+            container_name="ollama-qwen-churn",
+            specialized_models=[self.model_name]
         )
         
         # Configure WebUIManager for our specific setup
         self.webui_manager = WebUIManager()
-        urls = self.config_loader.get_urls()
-        self.webui_manager.config.update({
-            "name": webui_config['name'],
-            "port": webui_config['external_port'],
-            "url": urls['webui']
-        })
             
-        # Build unified configuration
+        # Build minimal configuration - just the essentials
         self.config = {
-            "project_name": self.config_loader.project_name,
-            "ollama_port": ollama_config['port'],
-            "webui_port": webui_config['external_port'],
-            "model_name": self.selected_model["name"],
-            "description": self.selected_model["description"],
+            "project_name": "qwen-churn-assistant",
+            "model_name": self.model_name,
             "cpu_mode": cpu_mode
         }
         
@@ -92,37 +76,16 @@ class QwenChurnAssistantManager:
             project_name="churn"
         )
         
-        # Set up compose files using config loader
-        compose_files = self.config_loader.get_compose_files(cpu_mode)
-        self.base_ollama_file = Path(compose_files[0])
-        self.base_webui_file = Path(compose_files[1])
-        
-        # Handle optional override files
-        if len(compose_files) > 2:
-            if not cpu_mode and "gpu-override" in compose_files[2]:
-                self.gpu_override_file = Path(compose_files[2])
-                self.qwen_override_file = Path(compose_files[3]) if len(compose_files) > 3 else None
-            else:
-                self.gpu_override_file = None
-                self.qwen_override_file = Path(compose_files[2])
-        else:
-            self.gpu_override_file = None
-            self.qwen_override_file = None
-        
-        # Display compose file usage
-        files_used = compose_files[:2]  # Base files
-        if not cpu_mode and self.gpu_override_file:
-            files_used.append(str(self.gpu_override_file))
-        if self.qwen_override_file:
-            files_used.append(str(self.qwen_override_file))
-            
-        mode_suffix = " (CPU mode)" if cpu_mode else " (GPU mode)"
-        files_display = " + ".join(files_used) + mode_suffix
+        # Set up compose files - use modular override approach
+        self.base_ollama_file = Path("docker-compose.ollama.yml")
+        self.base_webui_file = Path("docker-compose.webui.yml")
+        self.gpu_override_file = Path("docker-compose.gpu-override.yml")
+        self.qwen_override_file = Path("docker-compose.qwen-churn-override.yml")
         
         if cpu_mode:
-            print(f"🖥️  Using: {files_display}")
+            print(f"🖥️  Using: {self.base_ollama_file} + {self.base_webui_file} + {self.qwen_override_file} (CPU mode)")
         else:
-            print(f"🚀 Using: {files_display}")
+            print(f"🚀 Using: {self.base_ollama_file} + {self.base_webui_file} + {self.gpu_override_file} + {self.qwen_override_file} (GPU mode)")
         
     def wait_for_services(self):
         """Wait for both Ollama and Open WebUI to be ready using managers"""
@@ -132,8 +95,7 @@ class QwenChurnAssistantManager:
         ollama_ready = self.ollama_manager.wait_for_api(retries=120)
         
         if not ollama_ready:
-            ollama_config = self.config_loader.get_container_config('ollama')
-            print(f"   💡 Try checking container logs: docker logs {ollama_config['name']}")
+            print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
             return False
         
         # Use WebUIManager's wait_for_api_with_progress method with smart health checks
@@ -155,16 +117,16 @@ class QwenChurnAssistantManager:
             compose_files.append(str(self.base_webui_file))
         
         # Add GPU override if not in CPU mode
-        if not self.cpu_mode and self.gpu_override_file and self.gpu_override_file.exists():
+        if not self.cpu_mode and self.gpu_override_file.exists():
             compose_files.append(str(self.gpu_override_file))
         
         # Always add Qwen-specific override
-        if self.qwen_override_file and self.qwen_override_file.exists():
+        if self.qwen_override_file.exists():
             compose_files.append(str(self.qwen_override_file))
         
         return self.utility_manager.build_compose_command(
             compose_files=compose_files,
-            project_name=self.config_loader.project_name,
+            project_name="qwen-churn-assistant",
             action=action,
             additional_args=additional_args
         )
@@ -197,8 +159,8 @@ class QwenChurnAssistantManager:
         # Check system requirements
         if not self.utility_manager.check_system_requirements(
             model_name=self.config['model_name'],
-            model_description=self.config['description'],
-            vram_requirement=self.selected_model['vram_requirement']
+            model_description=f"{self.model_name} - Churn analysis model",
+            vram_requirement="8GB+ RAM (CPU mode)" if self.cpu_mode else "24GB+ VRAM (GPU mode)"
         ):
             return False
         
@@ -257,7 +219,7 @@ class QwenChurnAssistantManager:
         # Pull Qwen model using OllamaManager
         print(f"🤖 Pulling Qwen model: {self.config['model_name']}")
         print("   This may take several minutes depending on your internet connection...")
-        print(f"   Model: {self.selected_model['description']}")
+        print(f"   Model: {self.model_name} - Churn analysis model")
         print(f"   Size: {'~3GB' if '7b' in self.config['model_name'] else '~20GB'}")
         
         try:
@@ -306,8 +268,8 @@ class QwenChurnAssistantManager:
         print("\n" + "=" * 60)
         print(f"🎉 Qwen Churn Assistant Infrastructure is Ready! ({mode_info})")
         print("=" * 60)
-        print(f"📊 Open WebUI: http://localhost:{self.config['webui_port']}")
-        print(f"🤖 Ollama API: http://localhost:{self.config['ollama_port']}")
+        print(f"📊 Open WebUI: http://localhost:3000")
+        print(f"🤖 Ollama API: http://localhost:11434")
         print(f"🔧 Base Model: {self.config['model_name']}")
         print(f"⚡ Mode: {mode_info}")
         if prompt_configured and 'custom_model_name' in self.config:
@@ -380,7 +342,7 @@ class QwenChurnAssistantManager:
         
         try:
             # Check containers using UtilityManager
-            containers = [self.ollama_manager.config["name"], self.webui_manager.config["name"]]
+            containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
             print("🐳 Container Status:")
             self.utility_manager.check_container_status(containers)
             
@@ -388,7 +350,7 @@ class QwenChurnAssistantManager:
             print()
             
             # Check Ollama API using OllamaManager
-            is_running, status_message = self.ollama_manager.get_api_status(self.config['ollama_port'])
+            is_running, status_message = self.ollama_manager.get_api_status(11434)
             print(status_message)
             
             # Check WebUI using WebUIManager
@@ -409,7 +371,7 @@ class QwenChurnAssistantManager:
         
         # Check if Ollama is running
         print("🔍 Checking Ollama service status...")
-        is_running, status_message = self.ollama_manager.get_api_status(self.config['ollama_port'])
+        is_running, status_message = self.ollama_manager.get_api_status(11434)
         
         if not is_running:
             print("❌ Ollama service is not running!")
@@ -440,7 +402,7 @@ class QwenChurnAssistantManager:
         if custom_model_exists:
             print(f"🗑️  Removing existing custom model: {expected_custom_model_name}")
             try:
-                remove_cmd = f"docker exec {self.ollama_manager.config['name']} ollama rm {expected_custom_model_name}"
+                remove_cmd = f"docker exec ollama-qwen-churn ollama rm {expected_custom_model_name}"
                 result = self.utility_manager.run_subprocess(remove_cmd, check=False)
                 
                 if result.returncode == 0:
@@ -512,7 +474,7 @@ class QwenChurnAssistantManager:
         print("📋 Container Logs")
         print("=" * 40)
         
-        containers = [self.ollama_manager.config["name"], self.webui_manager.config["name"]]
+        containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
         
         for container_name in containers:
             print(f"\n🐳 {container_name} logs (last 20 lines):")
