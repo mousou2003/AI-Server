@@ -1,6 +1,7 @@
 import time
 import requests
 import webbrowser
+import docker
 from pathlib import Path
 
 
@@ -30,7 +31,7 @@ class WebUIManager:
     
     def wait_for_api_with_progress(self, retries=60, progress_interval=15):
         """
-        Wait for WebUI to be ready with progress reporting
+        Wait for WebUI to be ready with progress reporting and smart health checks
         
         Args:
             retries (int): Number of retries (default 60 for 60 seconds)
@@ -41,24 +42,128 @@ class WebUIManager:
         """
         print(f"   Checking {self.config['name']}...")
         
+        container_name = self.config.get("name", "open-webui")
+        
         for i in range(retries):
-            try:
-                response = requests.get(self.config["url"], timeout=3)
-                if response.status_code == 200:
-                    print(f"   ✅ {self.config['name']} is ready")
-                    return True
-            except requests.RequestException:
-                pass
+            # Check multiple readiness indicators
+            container_ready = self._check_container_health(container_name)
+            api_ready = self._check_api_ready()
             
-            # Print progress every interval seconds
+            if api_ready:
+                print(f"   ✅ {self.config['name']} is ready and responding")
+                return True
+            elif container_ready and i > 30:  # After 30 seconds, also check if container is healthy
+                # Container is running but API not ready - check for common startup issues
+                startup_status = self._check_startup_progress(container_name)
+                if "ERROR" in startup_status:
+                    print(f"   ❌ {self.config['name']} startup error detected: {startup_status}")
+                    return False
+            
+            # Print progress every interval seconds with more detail
             if i > 0 and i % progress_interval == 0:
-                print(f"   ⏳ Still waiting for {self.config['name']}... ({i}s elapsed)")
+                status = self._get_detailed_status(container_name)
+                print(f"   ⏳ Still waiting for {self.config['name']}... ({i}s elapsed) - {status}")
                 
             time.sleep(1)
         
         print(f"   ❌ {self.config['name']} failed to start within timeout")
-        print(f"   💡 Try checking container logs: docker logs {self.config['name']}")
+        print(f"   💡 Try checking container logs: docker logs {container_name}")
         return False
+    
+    def _check_container_health(self, container_name):
+        """Check if container is running and healthy"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            
+            # Check basic running status
+            if container.status != 'running':
+                return False
+            
+            # Check health status if available
+            health = container.attrs.get('State', {}).get('Health', {})
+            if health:
+                health_status = health.get('Status', 'none')
+                if health_status == 'healthy':
+                    return True
+                elif health_status == 'unhealthy':
+                    return False
+                # If starting or no health check, continue with other checks
+            
+            return True  # Running but no definitive health info
+        except (docker.errors.NotFound, Exception):
+            return False
+    
+    def _check_api_ready(self):
+        """Check if API endpoints are responding"""
+        try:
+            # Try multiple endpoints to ensure full readiness
+            endpoints = [
+                self.config["url"],  # Main page
+                f"{self.config['url']}/api/v1/models",  # API endpoint
+                f"{self.config['url']}/health"  # Health check endpoint
+            ]
+            
+            for endpoint in endpoints:
+                try:
+                    response = requests.get(endpoint, timeout=3)
+                    if response.status_code == 200:
+                        return True
+                except requests.RequestException:
+                    continue
+            return False
+        except Exception:
+            return False
+    
+    def _check_startup_progress(self, container_name):
+        """Check container logs for startup progress"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            logs = container.logs(tail=10).decode('utf-8')
+            
+            # Look for key startup indicators
+            if "Started server process" in logs:
+                return "Server started"
+            elif "Waiting for application startup" in logs:
+                return "Starting application"
+            elif "Installing external dependencies" in logs:
+                return "Installing dependencies"
+            elif "Fetching" in logs and "files" in logs:
+                return "Downloading files"
+            elif "ERROR" in logs or "Error" in logs:
+                return f"ERROR in logs"
+            else:
+                return "Initializing"
+        except Exception:
+            return "Unknown"
+    
+    def _get_detailed_status(self, container_name):
+        """Get detailed status for progress reporting"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            
+            # Get recent logs to understand what's happening
+            logs = container.logs(tail=5).decode('utf-8')
+            
+            if "Fetching" in logs and "files" in logs:
+                # Extract progress from fetching logs
+                lines = logs.split('\n')
+                for line in reversed(lines):
+                    if "Fetching" in line and "%" in line:
+                        return f"Downloading: {line.split('|')[1].strip() if '|' in line else 'in progress'}"
+                return "Downloading files"
+            elif "Installing external dependencies" in logs:
+                return "Installing dependencies"
+            elif "Started server process" in logs:
+                return "Server starting"
+            elif "Waiting for application startup" in logs:
+                return "Starting application"
+            else:
+                return f"Container: {container.status}"
+        except Exception:
+            return "Status unknown"
     
     def open_in_browser(self):
         """Open WebUI in the default browser"""
