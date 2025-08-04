@@ -96,7 +96,6 @@ class QwenChurnAssistantManager:
         
         # Setup complete infrastructure directories using OllamaManager
         self.ollama_manager.setup_complete_infrastructure(
-            webui_manager=self.webui_manager,
             project_name="churn"
         )
         

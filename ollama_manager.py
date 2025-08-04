@@ -351,12 +351,9 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         models_dir.mkdir(parents=True, exist_ok=True)
         return models_dir
     
-    def setup_complete_infrastructure(self, webui_manager, project_name="churn", 
+    def setup_complete_infrastructure(self, project_name, 
                                     models_path="models/.ollama",
-                                    workspace_path="workspace", 
-                                    memory_path="memory", 
-                                    templates_path="templates",
-                                    datasets_path="workspace/churn_analysis"):
+                                    datasets_path="workspace"):
         """
         Complete infrastructure setup for models and WebUI directories
         
@@ -372,23 +369,13 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         # Setup models directory (Ollama-specific)
         self.setup_models_directory(models_path)
         
-        # Setup base directories
-        workspace_dir = Path(workspace_path)
-        memory_dir = Path(memory_path)
-        templates_dir = Path(templates_path)
-        datasets_dir = Path(datasets_path)
+        datasets_dir = Path(datasets_path,project_name)
         
         # Create datasets directory
         datasets_dir.mkdir(parents=True, exist_ok=True)
         print(f"   ✅ Created datasets directory: {datasets_dir}")
         
-        # Create persistent directories using WebUIManager
-        webui_manager.create_persistent_directories(
-            workspace_dir=workspace_dir,
-            memory_dir=memory_dir,
-            templates_dir=templates_dir,
-            project_name=project_name
-        )
+
     
     def setup_specialized_churn_model(self, base_model_name, 
                                      template_name="qwen_churn_system_prompt.template.md",
