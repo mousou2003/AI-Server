@@ -1,5 +1,2 @@
-.ollama
-.llama
-.datasets
-test-output
+.*
 __pycache__

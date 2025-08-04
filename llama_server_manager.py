@@ -2,11 +2,12 @@ import os
 import sys
 import time
 import requests
+import docker
 
 
 class LlamaServerManager:
     def __init__(self, selected_quant=None, cpu_only=False):
-        self.model_dir = os.path.join(os.getcwd(), "models", ".llama")
+        self.model_dir = os.path.join(os.getcwd(), ".llama")
         self.inference_timeout = 60
         self.cpu_only = cpu_only
         
@@ -370,6 +371,196 @@ class LlamaServerManager:
             time.sleep(1)
         print(f"❌ {self.config['name']} not responding or no model loaded.")
         return False
+    
+    def wait_for_api_with_progress(self, retries=120, progress_interval=15):
+        """
+        Wait for llama-server API to be ready with progress reporting and smart health checks
+        
+        Args:
+            retries (int): Number of retries (default 120 for 2 minutes)
+            progress_interval (int): Interval to show progress messages
+            
+        Returns:
+            bool: True if API is ready, False if timeout
+        """
+        print(f"   Checking {self.config['name']}...")
+        
+        container_name = self.config.get("name", "llama-server")
+        
+        for i in range(retries):
+            # Check multiple readiness indicators
+            container_ready = self._check_container_health(container_name)
+            api_ready = self._check_api_ready()
+            model_loaded = self._check_model_loaded()
+            
+            if api_ready and model_loaded:
+                print(f"   ✅ {self.config['name']} is ready and model is loaded")
+                return True
+            elif container_ready and i > 30:  # After 30 seconds, also check if container is healthy
+                # Container is running but API not ready - check for common startup issues
+                startup_status = self._check_startup_progress(container_name)
+                if "ERROR" in startup_status or "failed" in startup_status.lower():
+                    print(f"   ❌ {self.config['name']} startup error detected: {startup_status}")
+                    return False
+            
+            # Print progress every interval seconds with more detail
+            if i > 0 and i % progress_interval == 0:
+                status = self._get_detailed_status(container_name)
+                print(f"   ⏳ Still waiting for {self.config['name']}... ({i}s elapsed) - {status}")
+                
+            time.sleep(1)
+        
+        print(f"   ❌ {self.config['name']} failed to start within timeout")
+        print(f"   💡 Try checking container logs: docker logs {container_name}")
+        return False
+    
+    def _check_container_health(self, container_name):
+        """Check if container is running and healthy"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            
+            # Check basic running status
+            if container.status != 'running':
+                return False
+            
+            # Check health status if available
+            health = container.attrs.get('State', {}).get('Health', {})
+            if health:
+                health_status = health.get('Status', 'none')
+                if health_status == 'healthy':
+                    return True
+                elif health_status == 'unhealthy':
+                    return False
+                # If starting or no health check, continue with other checks
+            
+            return True  # Running but no definitive health info
+        except (docker.errors.NotFound, Exception):
+            return False
+    
+    def _check_api_ready(self):
+        """Check if API endpoints are responding"""
+        try:
+            # Try multiple endpoints to ensure full readiness
+            endpoints = [
+                f"{self.config['url']}/health",  # Health check endpoint
+                f"{self.config['url']}/v1/models",  # Models endpoint
+                f"{self.config['url']}/props"  # Properties endpoint
+            ]
+            
+            for endpoint in endpoints:
+                try:
+                    response = requests.get(endpoint, timeout=3)
+                    if response.status_code == 200:
+                        return True
+                except requests.RequestException:
+                    continue
+            return False
+        except Exception:
+            return False
+    
+    def _check_model_loaded(self):
+        """Check if model is properly loaded"""
+        try:
+            response = requests.get(f"{self.config['url']}/v1/models", timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                if "data" in data and len(data["data"]) > 0:
+                    return True
+            return False
+        except Exception:
+            return False
+    
+    def _check_startup_progress(self, container_name):
+        """Check container logs for startup progress"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            logs = container.logs(tail=15).decode('utf-8', errors='ignore')
+            
+            # Look for key startup indicators
+            if "HTTP server is listening" in logs:
+                return "HTTP server started"
+            elif "loading model" in logs:
+                return "Loading model"
+            elif "model loaded" in logs or "llama_model_load" in logs:
+                return "Model loading in progress"
+            elif "binding port" in logs:
+                return "Binding to port"
+            elif "failed to open GGUF file" in logs:
+                return "ERROR: Model file not found"
+            elif "failed to load model" in logs:
+                return "ERROR: Model loading failed"
+            elif "error loading model" in logs:
+                return "ERROR: Model loading error"
+            elif "exiting due to" in logs:
+                return "ERROR: Server exiting"
+            else:
+                return "Initializing"
+        except Exception:
+            return "Unknown"
+    
+    def _get_detailed_status(self, container_name):
+        """Get detailed status for progress reporting"""
+        try:
+            client = docker.from_env()
+            container = client.containers.get(container_name)
+            
+            # Get recent logs to understand what's happening
+            logs = container.logs(tail=10).decode('utf-8', errors='ignore')
+            
+            if "loading model" in logs and "%" in logs:
+                # Extract progress from loading logs if available
+                lines = logs.split('\n')
+                for line in reversed(lines):
+                    if "%" in line and ("loading" in line.lower() or "progress" in line.lower()):
+                        return f"Loading: {line.strip()}"
+                return "Loading model"
+            elif "HTTP server is listening" in logs:
+                if "model loaded" in logs:
+                    return "Server ready, model loaded"
+                else:
+                    return "Server started, loading model"
+            elif "binding port" in logs:
+                return "Starting HTTP server"
+            elif "loading model" in logs:
+                return "Loading model file"
+            elif "failed to" in logs.lower() or "error" in logs.lower():
+                # Extract the most recent error
+                lines = logs.split('\n')
+                for line in reversed(lines):
+                    if "failed" in line.lower() or "error" in line.lower():
+                        return f"Error: {line.strip()[:50]}..."
+                return "Error detected"
+            else:
+                return f"Container: {container.status}"
+        except Exception:
+            return "Status unknown"
+    
+    def get_status_info(self):
+        """
+        Get status information for llama-server
+        
+        Returns:
+            tuple: (service_name, url, is_running, model_loaded)
+        """
+        try:
+            # Check basic API response
+            response = requests.get(f"{self.config['url']}/v1/models", timeout=2)
+            is_running = response.status_code == 200
+            
+            # Check if model is loaded
+            model_loaded = False
+            if is_running:
+                try:
+                    data = response.json()
+                    model_loaded = "data" in data and len(data["data"]) > 0
+                except:
+                    model_loaded = False
+            
+            return (self.config["name"], self.config["url"], is_running, model_loaded)
+        except requests.RequestException:
+            return (self.config["name"], self.config["url"], False, False)
     
     def test_completion(self, timeout=120):
         """Test the llama-server completion endpoint"""

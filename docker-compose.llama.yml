@@ -15,9 +15,15 @@ services:
       - LLAMA_ARG_THREADS=8
       - LLAMA_ARG_CTX_SIZE=32768  # Larger context for more data
     volumes:
-      - ./models/.llama:/models
+      - ./.llama:/models
     ports:
       - "11435:11435"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11435/health || curl -f http://localhost:11435/v1/models || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     networks:
       - ai_network
