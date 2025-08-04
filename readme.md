@@ -1,4 +1,8 @@
-# 🧠 Local AI-Powered Development & Business Analytics Platform
+# 🧠 L### 1. **Development Assistant Mode** 💻
+- 💬 Inline prompt support in VS Code via **Continue**
+- ⚙️ High-performance LLMs served by **llama.cpp** standalone server
+- 🚀 CUDA-enabled inference engine for optimal performance
+- 🔐 Secure remote access with **Tailscale**AI-Powered Development & Business Analytics Platform
 
 This project provides a **fully local AI infrastructure** with two specialized modes:
 
@@ -6,9 +10,8 @@ This project provides a **fully local AI infrastructure** with two specialized m
 
 ### 1. **Development Assistant Mode** 💻
 - 💬 Inline prompt support in VS Code via **Continue**
-- ⚙️ High-performance LLMs served by *### 🎯 **Benefits**
-- **🔧 Maintainable**: All configuration in version-controlled templatesllama** & **llama.cpp**
-- 🌐 Web interface via **Open WebUI**
+- ⚙️ High-performance LLMs served by **llama.cpp** standalone server
+- � CUDA-enabled inference engine for optimal performance
 - 🔐 Secure remote access with **Tailscale**
 
 ### 2. **Business Analytics Mode** 📊 **NEW!**
@@ -32,7 +35,7 @@ This project provides a **fully local AI infrastructure** with two specialized m
 
 ### Development Assistant Mode
 ```
-[freedom (VS Code + Continue)] <---> [last-nuc (llama.cpp + Open WebUI)]
+[freedom (VS Code + Continue)] <---> [last-nuc (llama.cpp server)]
                  ↖
                Mobile (via Tailscale)
 ```
@@ -54,8 +57,7 @@ This project provides a **fully local AI infrastructure** with two specialized m
 | Component     | Tool                                                     | Description                              |
 | ------------- | -------------------------------------------------------- | ---------------------------------------- |
 | **Development Mode** |                                                  |                                          |
-| LLM Inference | [`llama.cpp`](https://github.com/ggerganov/llama.cpp)   | High-performance inference engine for GGUF models |
-| LLM Backend   | [`Ollama`](https://ollama.ai)                           | Secondary backend for qwen2.5-coder:7b and gemma2:9b |
+| LLM Inference | [`llama.cpp`](https://github.com/ggerganov/llama.cpp)   | CUDA-enabled standalone inference server for GGUF models |
 | Primary Model | [`DeepSeek Coder V2 Lite`](https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct) | 15.7B parameter coding specialist model |
 | VSCode Plugin | [`Continue`](https://continue.dev)                       | Inline chat & refactor tools             |
 | **Business Analytics Mode** |                                          |                                          |
@@ -74,16 +76,16 @@ This project provides a **fully local AI infrastructure** with two specialized m
 This repository uses a **template-driven architecture** for maintainable, modular configuration:
 
 ### 🚀 **Entry Points**
-- **`start_llama_webui.py`**: Development assistant mode (coding, VS Code integration)
+- **`start_llama_server.py`**: llama.cpp server mode (CUDA-enabled, standalone inference engine)
 - **`start_qwen_churn_assistant.py`**: Business analytics mode (churn analysis, natural language)
 - **`test_qwen_setup.py`**: Validation script for setup verification
 
 ### ⚙️ **Core Management Modules**
 - **`utility_manager.py`**: Centralized subprocess operations and error handling
-- **`llama_server_manager.py`**: llama.cpp server operations and model management
+- **`llama_server_manager.py`**: llama.cpp server operations, model management, and enhanced health checks
 - **`ollama_manager.py`**: Ollama service management and model pulling
 - **`webui_manager.py`**: Open WebUI health checking and management
-- **`service_config.py`**: Configuration management and quantization options
+- **`network_manager.py`**: Network utilities and Docker Compose management
 
 ### 🏗️ **Modular Architecture Benefits**
 - **🔧 Single Responsibility**: Each manager handles one specific service
@@ -186,65 +188,64 @@ python test_qwen_setup.py
 # ✅ Directory structure and permissions
 ```
 
-### 3. **Start Development Assistant**
+### 3. **Start llama.cpp Server**
 
-#### GPU Mode (Recommended)
+#### GPU Mode (Recommended - CUDA-enabled)
 ```bash
-python start_llama_webui.py
+python start_llama_server.py
 ```
 
 #### CPU-Only Mode (No GPU Required)
 ```bash
-python start_llama_webui.py --cpu-only
+python start_llama_server.py --cpu-only
 ```
 
 **Quick Examples:**
-- `python start_llama_webui.py --auto` - GPU mode with default Q4_K_M
-- `python start_llama_webui.py --cpu-only --auto` - CPU mode with default Q2_K
-- `python start_llama_webui.py --cpu-only -q Q3_K_M` - CPU mode with better quality
-- `python start_llama_webui.py --list-quants` - Show all available quantization options
-- `python start_llama_webui.py --list-models` - List existing models in your models folder
-- `python start_llama_webui.py --cleanup` - Stop all containers after testing
+- `python start_llama_server.py --auto` - GPU mode with default Q4_K_M
+- `python start_llama_server.py --cpu-only --auto` - CPU mode with default Q2_K
+- `python start_llama_server.py --cpu-only -q Q3_K_M` - CPU mode with better quality
+- `python start_llama_server.py --list-quants` - Show all available quantization options
+- `python start_llama_server.py --list-models` - List existing models in your models folder
+- `python start_llama_server.py --cleanup` - Stop all containers after testing
 
 This script will automatically:
 - ✅ Download the DeepSeek Coder V2 Lite model if needed (~6-17GB depending on quantization)
-- 🚀 Start llama.cpp server with the selected model and quantization
-- 🐳 Launch Docker containers (Open WebUI + Ollama) using the appropriate compose file
-- 🧪 Test all API endpoints to ensure everything works
+- 🚀 Start llama.cpp server with CUDA support and the selected model/quantization
+- 🐳 Launch Docker container using `server-cuda` image with enhanced health checks
+- 🧪 Test API endpoints with comprehensive readiness verification
 - 🎯 Handle quantization selection interactively or via command-line options
 - ⚙️ Configure CPU-only or GPU-accelerated mode automatically
 
 **Available Services:**
-- **llama.cpp server**: Primary inference engine on port 11435
-- **Ollama**: Secondary model backend on port 11434  
-- **Open WebUI**: Web interface on port 3000
+- **llama.cpp server**: High-performance inference engine on port 11435 (CUDA-enabled)
+- **API Endpoints**: OpenAI-compatible REST API for integration
 
-The script uses a modular Docker Compose architecture:
-- **Base Services**: `docker-compose.ollama.yml`, `docker-compose.webui.yml`, `docker-compose.llama.yml`
-- **GPU Acceleration**: `docker-compose.gpu-override.yml` adds GPU support to base services
-- **Specializations**: Service-specific overrides like `docker-compose.qwen-churn-override.yml`
+The script uses a streamlined Docker Compose architecture:
+- **Base Service**: `docker-compose.llama.yml` with server-cuda image
+- **GPU Acceleration**: `docker-compose.gpu-override.yml` adds GPU runtime support
+- **Health Monitoring**: Comprehensive health checks at both container and API level
 
 **CPU vs GPU Mode:**
-- **GPU Mode**: Faster inference (~50+ tokens/sec), requires NVIDIA GPU with sufficient VRAM
+- **GPU Mode**: Faster inference (~50+ tokens/sec), uses CUDA-enabled server image
 - **CPU Mode**: Slower inference (~20 tokens/sec), works on any system with adequate RAM
 
 ### Advanced Options
 
 ```bash
 # Interactive quantization selection
-python start_llama_webui.py --cpu-only
+python start_llama_server.py --cpu-only
 
 # List all available quantization options
-python start_llama_webui.py --list-quants
+python start_llama_server.py --list-quants
 
 # List existing models in your models directory
-python start_llama_webui.py --list-models
+python start_llama_server.py --list-models
 
 # Use specific quantization
-python start_llama_webui.py --cpu-only -q Q3_K_M
+python start_llama_server.py --cpu-only -q Q3_K_M
 
 # Test deployment and cleanup afterwards
-python start_llama_webui.py --cleanup
+python start_llama_server.py --cleanup
 ```
 
 ### 4. **Start Business Analytics (Alternative Mode)**
@@ -256,7 +257,7 @@ python start_qwen_churn_assistant.py           # GPU mode (32B model)
 # Then visit http://localhost:3000 and upload your CSV files
 ```
 
-### 5. **Configure VS Code (Development Mode Only)**
+### 5. **Configure VS Code (Development Mode)**
 
 Install the Continue extension for VS Code: https://www.continue.dev/
 
@@ -267,11 +268,11 @@ name: Local Assistant
 version: 1.0.0
 schema: v1
 models:
-  # Primary model: DeepSeek Coder V2 Lite via llama.cpp
+  # Primary model: DeepSeek Coder V2 Lite via standalone llama.cpp server
   - name: deepseek-coder-v2-lite
     provider: openai
     model: DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf  # Adjust based on your quantization
-    apiBase: http://localhost:11435/v1  # llama.cpp server
+    apiBase: http://localhost:11435/v1  # Standalone llama.cpp server
     apiKey: fake  # Required but not used
     roles:
       - chat
@@ -281,32 +282,6 @@ models:
     defaultCompletionOptions:
       contextLength: 163840  # 160K context window
       maxTokens: 8192
-      
-  # Secondary models via Ollama
-  - name: qwen2.5-coder 7b
-    provider: ollama
-    model: qwen2.5-coder:7b
-    apiBase: http://localhost:11434
-    roles:
-      - chat
-      - edit
-      - apply
-      - autocomplete
-    defaultCompletionOptions:
-      contextLength: 32768
-      maxTokens: 8192
-      
-  - name: gemma2 9b
-    provider: ollama
-    model: gemma2:9b
-    apiBase: http://localhost:11434
-    roles:
-      - chat
-      - edit
-      - apply
-    defaultCompletionOptions:
-      contextLength: 8192
-      maxTokens: 4096
 
 context:
   - provider: code
@@ -320,8 +295,7 @@ context:
 
 **For remote access via Tailscale**, replace `localhost` with your Tailscale hostname:
 ```yaml
-apiBase: http://your-tailscale-hostname.ts.net:11435/v1  # For llama.cpp
-apiBase: http://your-tailscale-hostname.ts.net:11434    # For Ollama
+apiBase: http://your-tailscale-hostname.ts.net:11435/v1  # For standalone llama.cpp server
 ```
 
 ---
@@ -377,15 +351,14 @@ Get-ChildItem models -Recurse | Measure-Object -Property Length -Sum
 python start_qwen_churn_assistant.py --help
 ```
 
-### **Development Mode Testing**
+### **llama.cpp Server Testing**
 ```bash
-# Start development assistant
-python start_llama_webui.py --cpu-only --auto
+# Start standalone llama.cpp server
+python start_llama_server.py --cpu-only --auto
 
 # Verify endpoints
 curl http://localhost:11435/v1/models     # llama.cpp API
-curl http://localhost:11434/api/tags      # Ollama API  
-Start-Process "http://localhost:3000"     # Open WebUI in browser
+curl http://localhost:11435/health        # Health check endpoint
 
 # Test VS Code integration with Continue extension
 ```
@@ -405,11 +378,13 @@ python start_qwen_churn_assistant.py --status
 ### **Performance Verification**
 Recent deployment test results:
 
-**Development Mode** (DeepSeek Coder V2 Lite):
+**llama.cpp Server Mode** (DeepSeek Coder V2 Lite):
 - ✅ **CPU Mode**: Q2_K quantization at ~20 tokens/second
+- ✅ **GPU Mode**: CUDA-enabled server-cuda image for optimal performance
 - ✅ **Model Size**: 6.4GB loaded successfully  
 - ✅ **Context Length**: 163,840 tokens (160K context window)
-- ✅ **Parameters**: 15.7B parameters in CPU-only mode
+- ✅ **Parameters**: 15.7B parameters with enhanced health checks
+- ✅ **Health Monitoring**: Multi-endpoint validation and container health checks
 
 **Business Analytics Mode** (Qwen2.5-Coder):
 - ✅ **CPU Mode**: 7B model at ~15-20 tokens/second
@@ -419,9 +394,7 @@ Recent deployment test results:
 
 ### Remote Access
 For remote access via Tailscale, replace `localhost` with your Tailscale hostname:
-- Open WebUI: `http://your-tailscale-hostname.ts.net:3000`
 - llama.cpp API: `http://your-tailscale-hostname.ts.net:11435`
-- Ollama API: `http://your-tailscale-hostname.ts.net:11434`
 
 ---
 
@@ -729,13 +702,15 @@ If tests fail, check:
 
 The project uses a **modular architecture** with separated concerns:
 
-- **Main Script** (`start_llama_webui.py`): Entry point and orchestration
-- **Configuration** (`service_config.py`): Model settings and quantization options  
+- **Main Scripts**: 
+  - `start_llama_server.py`: Standalone llama.cpp server with CUDA support
+  - `start_qwen_churn_assistant.py`: Specialized business analytics mode
 - **Service Managers**: Individual managers for each service component
-  - `llama_server_manager.py`: llama.cpp operations and model management
+  - `llama_server_manager.py`: llama.cpp operations, model management, and enhanced health checks
   - `ollama_manager.py`: Ollama service and model pulling
   - `webui_manager.py`: Open WebUI health checks
   - `utility_manager.py`: Subprocess and utility functions
+  - `network_manager.py`: Network utilities and Docker Compose management
 
 All components follow the template-driven architecture with clear separation of concerns.
 
