@@ -47,6 +47,7 @@ Examples:
   python start_qwen_churn_assistant.py --logs       # Show container logs
   python start_qwen_churn_assistant.py --open       # Open WebUI in browser
   python start_qwen_churn_assistant.py --rebuild-model  # Rebuild custom churn model only
+  python start_qwen_churn_assistant.py --test      # Test the custom churn model
   python start_qwen_churn_assistant.py --cleanup-all  # Clean up everything including Docker volumes
 
 Notes:
@@ -75,6 +76,8 @@ Architecture:
                        help='Open WebUI in default browser')
     parser.add_argument('--rebuild-model', action='store_true',
                        help='Rebuild the custom churn model (requires running infrastructure)')
+    parser.add_argument('--test', action='store_true',
+                       help='Test the custom churn model to verify it\'s working correctly')
     parser.add_argument('--cleanup-all', action='store_true',
                        help='Comprehensive cleanup including Docker volumes (WARNING: removes all churn assistant data)')
     
@@ -95,6 +98,11 @@ Architecture:
         success = manager.rebuild_custom_model()
         if not success:
             print("❌ Failed to rebuild custom model")
+            sys.exit(1)
+    elif args.test:
+        success = manager.test_custom_model()
+        if not success:
+            print("❌ Test failed")
             sys.exit(1)
     elif args.cleanup_all:
         print("⚠️  WARNING: This will remove ALL churn assistant data including Docker volumes!")

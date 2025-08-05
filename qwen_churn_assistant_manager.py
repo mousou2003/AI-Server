@@ -488,3 +488,103 @@ class QwenChurnAssistantManager:
                 print(f"❌ {stderr}")
             elif stderr:
                 print("STDERR:", stderr)
+
+    def test_custom_model(self):
+        """Test the custom churn model to verify it's working correctly"""
+        mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+        print(f"🧪 Testing Custom Churn Model ({mode_info})")
+        print("=" * 50)
+        
+        # Check if Ollama is running
+        print("🔍 Checking Ollama service status...")
+        is_running, status_message = self.ollama_manager.get_api_status(11434)
+        
+        if not is_running:
+            print("❌ Ollama service is not running!")
+            print("💡 Please start the infrastructure first:")
+            print(f"   python start_qwen_churn_assistant.py --cpu" if self.cpu_mode else f"   python start_qwen_churn_assistant.py")
+            return False
+        
+        print("✅ Ollama service is available")
+        
+        # Determine which custom model to test
+        expected_custom_model_name = f"{self.model_name}-churn"
+        print(f"🔍 Checking for custom model: {expected_custom_model_name}")
+        
+        custom_model_exists = self.ollama_manager.verify_model_exists(expected_custom_model_name)
+        
+        if not custom_model_exists:
+            print(f"❌ Custom model '{expected_custom_model_name}' not found!")
+            print("💡 Please create the custom model first:")
+            print(f"   python start_qwen_churn_assistant.py --cpu --rebuild-model" if self.cpu_mode else f"   python start_qwen_churn_assistant.py --rebuild-model")
+            return False
+        
+        print(f"✅ Custom model '{expected_custom_model_name}' is available")
+        
+        # Run the test
+        test_prompt = "I have customer churn data and need help analyzing termination risk. Can you help?"
+        
+        print(f"\n🧪 Testing with prompt:")
+        print(f"   '{test_prompt}'")
+        print("\n📝 Response:")
+        print("-" * 40)
+        
+        try:
+            import subprocess
+            
+            # Run the test command
+            result = subprocess.run([
+                "docker", "exec", "ollama-qwen-churn", 
+                "ollama", "run", expected_custom_model_name, 
+                test_prompt
+            ], capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0:
+                response = result.stdout.strip()
+                print(response)
+                
+                # Analyze the response
+                business_keywords = [
+                    "business", "customer", "churn", "analysis", 
+                    "retention", "segments", "patterns", "risk",
+                    "data", "insights", "recommendations"
+                ]
+                
+                privacy_keywords = [
+                    "privacy", "personal data", "confidential", 
+                    "can't provide", "protected under", "sorry"
+                ]
+                
+                business_score = sum(1 for keyword in business_keywords if keyword.lower() in response.lower())
+                privacy_score = sum(1 for keyword in privacy_keywords if keyword.lower() in response.lower())
+                
+                print(f"\n📊 Analysis Results:")
+                print(f"   Business Keywords Found: {business_score}")
+                print(f"   Privacy Keywords Found: {privacy_score}")
+                
+                if business_score >= 3 and privacy_score == 0:
+                    print("   ✅ PASS: Model is responding as business churn analyst")
+                    print("\n🎉 Test completed successfully!")
+                    print(f"💡 You can now use '{expected_custom_model_name}' in the WebUI")
+                    return True
+                elif privacy_score > 0:
+                    print("   ❌ FAIL: Model still showing privacy/HR response behavior")
+                    print("💡 Try rebuilding the custom model:")
+                    print(f"   python start_qwen_churn_assistant.py --cpu --rebuild-model" if self.cpu_mode else f"   python start_qwen_churn_assistant.py --rebuild-model")
+                    return False
+                else:
+                    print("   ⚠️  UNCERTAIN: Response unclear or insufficient business keywords")
+                    print("💡 Manual review recommended - check the response above")
+                    return False
+                    
+            else:
+                print(f"❌ Error running test: {result.stderr}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            print("❌ Test timed out after 60 seconds")
+            print("💡 The model might be loading for the first time, try again")
+            return False
+        except Exception as e:
+            print(f"❌ Error running test: {e}")
+            return False
