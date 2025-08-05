@@ -41,13 +41,19 @@ class QwenChurnAssistantManager:
         self.utility_manager = UtilityManager()
         
         # Qwen model selection for churn analysis
+        # Optimized for RTX 3060 Ti (8GB VRAM) - use 7B model for both modes
         if cpu_mode and not large_model:
             # Use smaller model for CPU mode (much faster)
             self.model_name = "qwen2.5-coder:7b"
             print("🖥️  CPU-only mode enabled - using 7B model for better performance")
-        else:
-            # Use full model for GPU mode or when explicitly requested
+        elif large_model:
+            # Use full model only when explicitly requested
             self.model_name = "qwen2.5-coder:32b"
+            print("⚠️  32B model requested - may be slow on RTX 3060 Ti (8GB VRAM)")
+        else:
+            # Use 7B model for GPU mode too (RTX 3060 Ti optimized)
+            self.model_name = "qwen2.5-coder:7b"
+            print("🚀 GPU mode enabled - using 7B model optimized for RTX 3060 Ti")
             if cpu_mode and large_model:
                 print("🖥️  CPU-only mode with 32B model - this will be very slow!")
                 print("     Consider using the default 7B model for CPU mode")
@@ -98,6 +104,15 @@ class QwenChurnAssistantManager:
             print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
             return False
         
+        # Additional check: Wait for tensor loading to complete
+        print("   🧠 Checking for model tensor loading completion...")
+        tensor_loading_complete = self.wait_for_tensor_loading()
+        
+        if not tensor_loading_complete:
+            print("   ⚠️  Tensor loading check failed, but API is responsive")
+            print("   💡 Model may still be loading in background")
+            print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
+        
         # Use WebUIManager's wait_for_api_with_progress method with smart health checks
         # WebUI can take 3-5 minutes to initialize on first startup due to file downloads
         print("   📱 WebUI initialization can take 3-5 minutes on first startup...")
@@ -107,6 +122,79 @@ class QwenChurnAssistantManager:
             return False
             
         return True
+    
+    def wait_for_tensor_loading(self):
+        """
+        Wait for tensor loading to complete by monitoring container logs
+        
+        Returns:
+            bool: True if tensor loading completes or is not detected, False if timeout
+        """
+        print("   🔍 Monitoring tensor loading progress...")
+        
+        import time
+        max_wait_time = 300  # 5 minutes max wait for tensor loading
+        check_interval = 5   # Check every 5 seconds
+        start_time = time.time()
+        
+        tensor_loading_detected = False
+        
+        while (time.time() - start_time) < max_wait_time:
+            try:
+                # Get recent container logs
+                stdout, stderr = self.utility_manager.get_container_logs("ollama-qwen-churn", lines=50)
+                
+                if stdout:
+                    # Check for tensor loading messages
+                    if "loading model tensors" in stdout.lower():
+                        if not tensor_loading_detected:
+                            print("   📊 Tensor loading detected, waiting for completion...")
+                            tensor_loading_detected = True
+                    
+                    # Check for completion indicators
+                    completion_indicators = [
+                        "load_tensors: model tensors loaded",
+                        "model loaded successfully",
+                        "llama runner started",
+                        "server listening"
+                    ]
+                    
+                    if any(indicator in stdout.lower() for indicator in completion_indicators):
+                        if tensor_loading_detected:
+                            print("   ✅ Tensor loading completed successfully")
+                        return True
+                    
+                    # Check for error conditions
+                    error_indicators = [
+                        "failed to load",
+                        "out of memory",
+                        "cuda error",
+                        "tensor loading failed"
+                    ]
+                    
+                    if any(error in stdout.lower() for error in error_indicators):
+                        print(f"   ❌ Error detected during tensor loading")
+                        return False
+                
+                # If no tensor loading detected within first 30 seconds, assume not needed
+                if not tensor_loading_detected and (time.time() - start_time) > 30:
+                    print("   ℹ️  No tensor loading detected - model may already be cached")
+                    return True
+                
+                time.sleep(check_interval)
+                
+            except Exception as e:
+                print(f"   ⚠️  Error monitoring tensor loading: {e}")
+                # Don't fail the entire startup for monitoring issues
+                return True
+        
+        if tensor_loading_detected:
+            print(f"   ⚠️  Tensor loading timeout after {max_wait_time} seconds")
+            print("   💡 Model may still be loading - check performance in WebUI")
+            return False
+        else:
+            # No tensor loading detected, probably fine
+            return True
     
     def get_compose_command(self, action="up", additional_args=""):
         """Build the docker compose command with appropriate files using UtilityManager"""
@@ -507,6 +595,18 @@ class QwenChurnAssistantManager:
         
         print("✅ Ollama service is available")
         
+        # Wait for services to be fully ready (including tensor loading)
+        print("🔍 Ensuring services are fully ready (including tensor loading)...")
+        services_ready = self.wait_for_services()
+        
+        if not services_ready:
+            print("❌ Services are not fully ready!")
+            print("💡 Try waiting a bit longer or check container logs:")
+            print("   docker logs ollama-qwen-churn")
+            return False
+        
+        print("✅ All services are fully ready")
+        
         # Determine which custom model to test
         expected_custom_model_name = f"{self.model_name}-churn"
         print(f"🔍 Checking for custom model: {expected_custom_model_name}")
@@ -532,12 +632,16 @@ class QwenChurnAssistantManager:
         try:
             import subprocess
             
-            # Run the test command
+            # Increase timeout for large models
+            timeout_seconds = 180 if "32b" in expected_custom_model_name else 60
+            print(f"   ⏰ Using {timeout_seconds}s timeout for {'large' if '32b' in expected_custom_model_name else 'standard'} model")
+            
+            # Run the test command with proper encoding handling
             result = subprocess.run([
                 "docker", "exec", "ollama-qwen-churn", 
                 "ollama", "run", expected_custom_model_name, 
                 test_prompt
-            ], capture_output=True, text=True, timeout=60)
+            ], capture_output=True, text=True, timeout=timeout_seconds, encoding='utf-8', errors='replace')
             
             if result.returncode == 0:
                 response = result.stdout.strip()
@@ -582,8 +686,15 @@ class QwenChurnAssistantManager:
                 return False
                 
         except subprocess.TimeoutExpired:
-            print("❌ Test timed out after 60 seconds")
-            print("💡 The model might be loading for the first time, try again")
+            model_size = "32B" if "32b" in expected_custom_model_name else "7B"
+            timeout_used = 180 if "32b" in expected_custom_model_name else 60
+            print(f"❌ Test timed out after {timeout_used} seconds")
+            if "32b" in expected_custom_model_name:
+                print("💡 32B model is too large for RTX 3060 Ti (8GB VRAM)")
+                print("💡 Try using the optimized 7B model instead:")
+                print(f"   python start_qwen_churn_assistant.py --test")
+            else:
+                print("💡 The model might be loading for the first time, try again")
             return False
         except Exception as e:
             print(f"❌ Error running test: {e}")

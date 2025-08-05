@@ -9,17 +9,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 32g
+          memory: 32g  # Adjusted for 64GB system RAM
         reservations:
-          memory: 8g
+          memory: 8g   # Conservative reservation
           devices:
             - capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      # GPU-optimized settings
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_LOADED_MODELS=2
+      # RTX 3060 Ti (8GB VRAM) optimized settings
       - OLLAMA_FLASH_ATTENTION=true
+      # Realistic GPU layer count for 8GB VRAM
+      - OLLAMA_NUM_GPU=25  # Optimized for RTX 3060 Ti
 
   # Standard Llama.cpp server GPU overrides
   llama-server:
