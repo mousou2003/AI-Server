@@ -8,7 +8,10 @@ services:
   ollama:
     deploy:
       resources:
+        limits:
+          memory: 32g
         reservations:
+          memory: 8g
           devices:
             - capabilities: [gpu]
     environment:
@@ -17,8 +20,6 @@ services:
       - OLLAMA_NUM_PARALLEL=2
       - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_FLASH_ATTENTION=true
-    mem_limit: 32g
-    mem_reservation: 8g
 
   # Standard Llama.cpp server GPU overrides
   llama-server:

@@ -28,8 +28,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s  # Give WebUI 2 minutes to fully initialize
-    mem_limit: ${WEBUI_MEM_LIMIT:-4g}
-    mem_reservation: ${WEBUI_MEM_RESERVATION:-2g}
+    deploy:
+      resources:
+        limits:
+          memory: ${WEBUI_MEM_LIMIT:-4g}
+        reservations:
+          memory: ${WEBUI_MEM_RESERVATION:-2g}
     networks:
       - ai_network
 
