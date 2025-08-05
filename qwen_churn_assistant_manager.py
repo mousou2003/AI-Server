@@ -113,6 +113,16 @@ class QwenChurnAssistantManager:
             print("   💡 Model may still be loading in background")
             print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
         
+        # Force model loading by making a test API call
+        print("   🔥 Triggering model loading with test API call...")
+        model_loaded = self.trigger_model_loading()
+        
+        if not model_loaded:
+            print("   ⚠️  Test API call failed, but basic API is responsive")
+            print("   💡 Model may still be initializing - check performance in WebUI")
+        else:
+            print("   ✅ Model successfully loaded and ready for inference")
+        
         # Use WebUIManager's wait_for_api_with_progress method with smart health checks
         # WebUI can take 3-5 minutes to initialize on first startup due to file downloads
         print("   📱 WebUI initialization can take 3-5 minutes on first startup...")
@@ -195,6 +205,61 @@ class QwenChurnAssistantManager:
         else:
             # No tensor loading detected, probably fine
             return True
+    
+    def trigger_model_loading(self):
+        """
+        Actively trigger model loading by making a test API call to Ollama
+        
+        Returns:
+            bool: True if model loads successfully, False otherwise
+        """
+        import requests
+        import json
+        
+        try:
+            # Use a simple, fast test prompt to trigger model loading
+            test_data = {
+                "model": self.model_name,
+                "prompt": "Hi",
+                "stream": False,
+                "options": {
+                    "num_predict": 1,  # Only generate 1 token to make it fast
+                    "temperature": 0.1
+                }
+            }
+            
+            # Make API call to trigger model loading
+            print(f"   📡 Making test API call to load {self.model_name}...")
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json=test_data,
+                timeout=120  # 2 minutes timeout for model loading
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'response' in result:
+                    print("   🎯 Test API call successful - model is loaded and responsive")
+                    return True
+                else:
+                    print("   ⚠️  Test API call returned unexpected format")
+                    return False
+            else:
+                print(f"   ❌ Test API call failed with status {response.status_code}")
+                if response.status_code == 404:
+                    print(f"   💡 Model '{self.model_name}' may not be available")
+                return False
+                
+        except requests.exceptions.Timeout:
+            print("   ⏰ Test API call timed out - model may be loading slowly")
+            print("   💡 This is normal for first-time model loading")
+            return False
+        except requests.exceptions.ConnectionError:
+            print("   🔌 Connection error during test API call")
+            return False
+        except Exception as e:
+            print(f"   ❌ Error during test API call: {e}")
+            return False
     
     def get_compose_command(self, action="up", additional_args=""):
         """Build the docker compose command with appropriate files using UtilityManager"""
@@ -594,18 +659,6 @@ class QwenChurnAssistantManager:
             return False
         
         print("✅ Ollama service is available")
-        
-        # Wait for services to be fully ready (including tensor loading)
-        print("🔍 Ensuring services are fully ready (including tensor loading)...")
-        services_ready = self.wait_for_services()
-        
-        if not services_ready:
-            print("❌ Services are not fully ready!")
-            print("💡 Try waiting a bit longer or check container logs:")
-            print("   docker logs ollama-qwen-churn")
-            return False
-        
-        print("✅ All services are fully ready")
         
         # Determine which custom model to test
         expected_custom_model_name = f"{self.model_name}-churn"
