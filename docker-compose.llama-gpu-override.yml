@@ -1,0 +1,16 @@
+# Llama Server GPU Override
+# Usage: docker compose -f docker-compose.llama.yml -f docker-compose.llama-gpu-override.yml up -d
+# Adds GPU acceleration specifically for llama.cpp server
+
+services:
+  # Llama.cpp server GPU overrides
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda  # Use CUDA image
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - LLAMA_ARG_N_GPU_LAYERS=35  # Enable GPU layers
+      - LLAMA_ARG_NGL=1

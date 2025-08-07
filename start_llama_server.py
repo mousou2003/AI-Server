@@ -38,7 +38,7 @@ def main(cleanup=False, quantization=None, auto_select=False, cpu_only=False):
     # Build compose command - just llama server with GPU override if needed
     base_files = ["docker-compose.llama.yml"]
     if not cpu_only:
-        base_files.append("docker-compose.gpu-override.yml")  # Add GPU acceleration
+        base_files.append("docker-compose.llama-gpu-override.yml")  # Add GPU acceleration for llama-server
     
     compose_cmd = "docker compose " + " ".join([f"-f {f}" for f in base_files])
     print(f"🚀 Starting llama.cpp server ({'CPU mode' if cpu_only else 'GPU mode'})...")
@@ -89,7 +89,7 @@ Examples:
 
 Architecture:
   Base files: docker-compose.llama.yml (CPU-optimized)
-  GPU mode: + docker-compose.gpu-override.yml (adds GPU acceleration)
+  GPU mode: + docker-compose.llama-gpu-override.yml (adds GPU acceleration)
 
 API Endpoint:
   Server: http://localhost:11435
