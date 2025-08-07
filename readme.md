@@ -1,9 +1,3 @@
-# 🧠 L### 1. **Development Assistant Mode** 💻
-- 💬 Inline prompt support in VS Code via **Continue**
-- ⚙️ High-performance LLMs served by **llama.cpp** standalone server
-- 🚀 CUDA-enabled inference engine for optimal performance
-- 🔐 Secure remote access with **Tailscale**AI-Powered Development & Business Analytics Platform
-
 This project provides a **fully local AI infrastructure** with two specialized modes:
 
 ## 🎯 **Dual-Mode AI Platform**
