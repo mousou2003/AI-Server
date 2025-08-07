@@ -1,6 +1,5 @@
-This project provides a **fully local AI infrastructure** with two specialized modes:
-
 ## 🎯 **Dual-Mode AI Platform**
+This project provides a **fully local AI infrastructure** with two specialized modes:
 
 ### 1. **Development Assistant Mode** 💻
 - 💬 Inline prompt support in VS Code via **Continue**
