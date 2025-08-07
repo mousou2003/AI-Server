@@ -78,13 +78,13 @@ This repository uses a **template-driven architecture** for maintainable, modula
 ### 🚀 **Entry Points**
 - **`start_llama_server.py`**: llama.cpp server mode (CUDA-enabled, standalone inference engine)
 - **`start_qwen_churn_assistant.py`**: Business analytics mode (churn analysis, natural language)
-- **`test_qwen_setup.py`**: Validation script for setup verification
 
 ### ⚙️ **Core Management Modules**
 - **`utility_manager.py`**: Centralized subprocess operations and error handling
 - **`llama_server_manager.py`**: llama.cpp server operations, model management, and enhanced health checks
 - **`ollama_manager.py`**: Ollama service management and model pulling
 - **`webui_manager.py`**: Open WebUI health checking and management
+- **`qwen_churn_assistant_manager.py`**: Specialized business analytics infrastructure management
 - **`network_manager.py`**: Network utilities and Docker Compose management
 
 ### 🏗️ **Modular Architecture Benefits**
@@ -99,18 +99,15 @@ This repository uses a **template-driven architecture** for maintainable, modula
 ```
 templates/
 ├── 🤖 AI Model Configuration
-│   └── qwen_churn_system_prompt.template.md     # Business intelligence system prompt
-├── 🐳 Docker Infrastructure  
-│   ├── docker-compose.qwen-churn.template.yml   # GPU-accelerated business analytics
-│   └── docker-compose.qwen-churn.cpu.template.yml # CPU-only business analytics
-└── 🧠 Memory & Workspace
-    └── churn_memory_template.md                 # Analysis framework and memory structure
+│   └── qwen_churn_system_prompt.template.json   # Business intelligence system prompt
+└── 🛠️ Open WebUI Integration
+    └── open-webui_tools.py                     # CSV analysis tools for Open WebUI
 ```
 
 ### 📁 **Runtime Directories**
-- **`models/`**: Downloaded model files (auto-created, gitignored)
-- **`memory/`**: Persistent conversation memory (created from templates)
-- **`workspace/`**: File analysis workspace (persistent, user data)
+- **`.ollama/`**: Ollama data and models (auto-created, gitignored)
+- **`.llama/`**: Llama.cpp models (auto-created, gitignored)
+- **`.datasets/`**: Analysis workspace (persistent, user data)
 
 ### 📚 **Documentation**
 - **`readme.md`**: This comprehensive guide (single source of truth)
@@ -119,9 +116,9 @@ templates/
 - **`docker-compose.ollama.yml`**: Base Ollama service (CPU-optimized)
 - **`docker-compose.webui.yml`**: Base Open WebUI service
 - **`docker-compose.llama.yml`**: Base Llama.cpp server
-- **`docker-compose.gpu-override.yml`**: GPU acceleration overlay
+- **`docker-compose.gpu-override.yml`**: GPU acceleration overlay (Ollama + WebUI)
+- **`docker-compose.llama-gpu-override.yml`**: GPU acceleration for llama.cpp server
 - **`docker-compose.qwen-churn-override.yml`**: Qwen Churn Assistant specialization
-- **`docker-compose.llama-webui-override.yml`**: Llama + WebUI combination
 - **`.gitignore`**: Excludes models, runtime files, preserves templates
 
 ---
@@ -177,15 +174,12 @@ cd AI-Server
 
 ### 2. **Verify Setup (Recommended)**
 ```bash
-# Run comprehensive setup validation
-python test_qwen_setup.py
+# Test basic functionality
+python start_qwen_churn_assistant.py --help
+python start_llama_server.py --help
 
-# This checks:
-# ✅ Docker availability and configuration
-# ✅ Required files and template structure  
-# ✅ Network connectivity for model downloads
-# ✅ GPU availability (optional)
-# ✅ Directory structure and permissions
+# Verify Docker is running
+docker --version
 ```
 
 ### 3. **Start llama.cpp Server**
@@ -205,7 +199,7 @@ python start_llama_server.py --cpu-only
 - `python start_llama_server.py --cpu-only --auto` - CPU mode with default Q2_K
 - `python start_llama_server.py --cpu-only -q Q3_K_M` - CPU mode with better quality
 - `python start_llama_server.py --list-quants` - Show all available quantization options
-- `python start_llama_server.py --list-models` - List existing models in your models folder
+- `python start_llama_server.py --list-models` - List existing models in your .llama folder
 - `python start_llama_server.py --cleanup` - Stop all containers after testing
 
 This script will automatically:
@@ -222,7 +216,7 @@ This script will automatically:
 
 The script uses a streamlined Docker Compose architecture:
 - **Base Service**: `docker-compose.llama.yml` with server-cuda image
-- **GPU Acceleration**: `docker-compose.gpu-override.yml` adds GPU runtime support
+- **GPU Acceleration**: `docker-compose.llama-gpu-override.yml` adds GPU runtime support
 - **Health Monitoring**: Comprehensive health checks at both container and API level
 
 **CPU vs GPU Mode:**
@@ -238,7 +232,7 @@ python start_llama_server.py --cpu-only
 # List all available quantization options
 python start_llama_server.py --list-quants
 
-# List existing models in your models directory
+# List existing models in your .llama directory
 python start_llama_server.py --list-models
 
 # Use specific quantization
@@ -315,9 +309,8 @@ This project pioneered a **template-based approach** to AI infrastructure deploy
 
 | Template Type | Purpose | Example |
 |---------------|---------|---------|
-| **🤖 AI Configuration** | System prompts, model parameters | `qwen_churn_system_prompt.template.md` |
-| **🐳 Infrastructure** | Docker Compose configurations | `docker-compose.qwen-churn.template.yml` |
-| **🧠 Memory Systems** | Conversation memory frameworks | `churn_memory_template.md` |
+| **🤖 AI Configuration** | System prompts, model parameters | `qwen_churn_system_prompt.template.json` |
+| **�️ Tool Integration** | WebUI tools and utilities | `open-webui_tools.py` |
 
 ### 🔄 **Template Processing Flow**
 ```
@@ -345,7 +338,8 @@ Want to create your own AI assistant mode? Simply:
 docker --version
 
 # Check available disk space (models are large)
-Get-ChildItem models -Recurse | Measure-Object -Property Length -Sum
+dir .llama
+dir .ollama
 
 # Test basic functionality
 python start_qwen_churn_assistant.py --help
@@ -412,6 +406,7 @@ The Qwen Churn Assistant is a specialized business intelligence system that anal
 - **💡 Actionable Insights**: Get practical recommendations, not just statistics
 - **📝 Memory-Enabled**: Remembers context across analysis sessions
 - **📁 Workspace Integration**: Upload and analyze CSV files directly
+- **🛠️ Built-in Tools**: Custom CSV analysis tools integrated with Open WebUI
 
 ### 🚀 **Quick Start**
 ```bash
@@ -431,7 +426,34 @@ python start_qwen_churn_assistant.py --logs      # View container logs
 python start_qwen_churn_assistant.py --cleanup   # Clean temporary files
 ```
 
-### 💬 **Example Business Questions**
+### �️ **Open WebUI Tools Integration**
+
+The system includes custom Python tools that extend Open WebUI's capabilities for CSV data analysis:
+
+**Available Tools:**
+- **`analyze_wine_club_csv`**: Direct CSV upload analysis for business insights
+- **`load_raw_csv_from_storage`**: Preview CSV files from Open WebUI storage  
+- **`analyze_wine_club_from_knowledge`**: Advanced analysis of stored CSV files
+- **File Resolution**: Smart file matching from partial filenames
+
+**Tool Features:**
+- **Automatic File Discovery**: Upload CSV files and reference them by partial name
+- **Data Sampling**: Configurable row limits for large datasets
+- **Business Context**: Tools designed for business analysis, not technical processing
+- **Error Handling**: Comprehensive error messages and fallback behaviors
+- **Storage Integration**: Works with Open WebUI's persistent file storage
+
+**Usage Example:**
+```
+1. Upload a CSV file named "customer-churn-data.csv" to Open WebUI
+2. Ask: "Use the analyze_wine_club_from_knowledge tool to analyze churn-data.csv and tell me about customer retention patterns"
+3. The tool will automatically find and analyze your uploaded file
+```
+
+**Tool Installation:**
+The tools are automatically available when using the Qwen Churn Assistant mode. They're located in `templates/open-webui_tools.py` and integrate seamlessly with the business analytics workflow.
+
+### �💬 **Example Business Questions**
 Once your CSV data is uploaded, ask questions like:
 
 **Initial Data Exploration:**
@@ -460,6 +482,8 @@ Once your CSV data is uploaded, ask questions like:
 - **Standard Architecture**: Proper Open WebUI + Ollama integration (models auto-discovered)
 - **Memory & Workspace**: Persistent conversations and file analysis via Docker volumes
 - **CPU/GPU Optimized**: Automatically selects appropriate model size for your hardware
+- **Integrated Tools**: Custom CSV analysis tools built into Open WebUI
+- **File Management**: Smart file resolution and storage integration
 
 ### 🏗️ **Template Architecture**
 The system uses a sophisticated template-driven approach:
@@ -467,17 +491,21 @@ The system uses a sophisticated template-driven approach:
 ```
 User Question → Business AI (Qwen + Custom Prompt) → Actionable Insight
      ↑                           ↓
-CSV Upload ←→ Workspace ←→ Memory System
+CSV Upload ←→ WebUI Tools ←→ Workspace ←→ Memory System
 ```
 
 **Template Components:**
-- **System Prompt**: `templates/qwen_churn_system_prompt.template.md`
-- **Docker Config**: `templates/docker-compose.qwen-churn.template.yml`  
-- **Memory Framework**: `templates/churn_memory_template.md`
+- **System Prompt**: `templates/qwen_churn_system_prompt.template.json`
+- **CSV Tools**: `templates/open-webui_tools.py`
 - **WebUI Integration**: Standard Ollama connection (auto-discovery)
 
 ### � **Data Requirements**
 **Supported Formats:** CSV files with customer records
+
+**Upload Methods:**
+- **Direct Upload**: Use Open WebUI's file upload feature
+- **Tool Integration**: Files are automatically processed by built-in CSV analysis tools
+- **Partial Naming**: Reference files by partial names (e.g., "churn-data.csv" matches "customer-churn-data.csv")
 
 **Recommended Structure:**
 - **Customer ID**: Unique identifier
