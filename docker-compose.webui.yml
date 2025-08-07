@@ -19,21 +19,25 @@ services:
       - ENABLE_MEMORY=${ENABLE_MEMORY:-true}
       - ENABLE_TOOLS=${ENABLE_TOOLS:-true}
       - TOOLS_FUNCTION_CALLING_ENABLED=${TOOLS_FUNCTION_CALLING_ENABLED:-true}
+      # Large payload optimizations
+      - WEBUI_REQUEST_TIMEOUT=300
+      - WEBUI_MAX_FILE_SIZE=50m
+      - OLLAMA_REQUEST_TIMEOUT=300
     volumes:
       - open-webui:/app/backend/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "curl", "-f", "http://localhost:8080/", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s  # Give WebUI 2 minutes to fully initialize
+      interval: 60s   # Longer interval for large processing
+      timeout: 30s    # Increased timeout
+      retries: 5
+      start_period: 180s  # Give WebUI 3 minutes to fully initialize
     deploy:
       resources:
         limits:
-          memory: ${WEBUI_MEM_LIMIT:-4g}
+          memory: ${WEBUI_MEM_LIMIT:-6g}  # Sufficient for WebUI + large payload handling
         reservations:
-          memory: ${WEBUI_MEM_RESERVATION:-2g}
+          memory: ${WEBUI_MEM_RESERVATION:-3g}  # Adequate reservation
     networks:
       - ai_network
 

@@ -9,23 +9,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 32g  # Adjusted for 64GB system RAM
+          memory: 22g  # 7B model + GPU overhead + large payload
         reservations:
-          memory: 8g   # Conservative reservation
+          memory: 14g   # Just enough for 7B model (more efficient GPU transfers)
           devices:
             - capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      # RTX 3060 Ti (8GB VRAM) optimized settings
+      # RTX 3060 Ti (8GB VRAM) optimized settings for large payloads
       - OLLAMA_FLASH_ATTENTION=true
       # Realistic GPU layer count for 8GB VRAM
       - OLLAMA_NUM_GPU=25  # Optimized for RTX 3060 Ti
-
-  # Standard WebUI GPU overrides
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:cuda  # Use CUDA image
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
+      # Large payload GPU optimizations
+      - OLLAMA_REQUEST_TIMEOUT=600  # Extended for GPU processing
+      - OLLAMA_GPU_MEMORY_FRACTION=0.9
