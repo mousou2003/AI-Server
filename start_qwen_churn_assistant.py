@@ -6,7 +6,7 @@ This script sets up the infrastructure for the Qwen Churn Assistant as described
 It deploys Qwen2.5-Coder-32B-Instruct via Ollama and Open WebUI for churn analysis conversations.
 
 Key Features:
-- Deploys Qwen2.5-Coder-32B-Instruct model via Ollama
+- Deploys Qwen2.5-Coder model via Ollama (7B default, 32B optional)
 - Sets up Open WebUI for natural language churn analysis
 - Configures specialized model with business-focused churn analysis prompt
 - No code execution - purely conversational analysis
@@ -14,7 +14,7 @@ Key Features:
 
 Requirements:
 - Docker and Docker Compose
-- For GPU mode: NVIDIA GPU with sufficient VRAM (recommended: 24GB+ for 32B model)
+- For GPU mode: NVIDIA GPU (optimized for RTX 3060 Ti with 8GB VRAM)
 - For CPU mode: Sufficient RAM (slower but works on any hardware)
 - CPU-only mode available with --cpu flag
 """
@@ -39,7 +39,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python start_qwen_churn_assistant.py              # Start with GPU acceleration (32B model)
+  python start_qwen_churn_assistant.py              # Start with GPU acceleration (7B model)
   python start_qwen_churn_assistant.py --cpu        # Use CPU-only mode (7B model)
   python start_qwen_churn_assistant.py --cpu --large-model  # CPU with 32B model (slow)
   python start_qwen_churn_assistant.py --stop       # Stop the infrastructure
@@ -52,8 +52,9 @@ Examples:
 
 Notes:
   - First startup may take 3-5 minutes as WebUI downloads dependencies
-  - GPU mode requires NVIDIA GPU with 24GB+ VRAM for 32B model
+  - GPU mode uses 7B model optimized for RTX 3060 Ti (8GB VRAM)
   - CPU mode is slower but works on any hardware
+  - Use --large-model for 32B model (requires more resources)
 
 Architecture:
   Base files: docker-compose.ollama.yml + docker-compose.webui.yml (CPU-optimized)
