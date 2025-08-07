@@ -3,9 +3,8 @@ This project provides a **fully local AI infrastructure** with two specialized m
 
 ### 1. **Development Assistant Mode** 💻
 - 💬 Inline prompt support in VS Code via **Continue**
-- ⚙️ High-performance LLMs served by **llama.cpp** standalone server
-- � CUDA-enabled inference engine for optimal performance
-- 🔐 Secure remote access with **Tailscale**
+- ⚙️ **DeepSeek Coder V2 Lite** served by **llama.cpp** standalone server
+- 🧠 Code generation, editing, and autocomplete capabilities
 
 ### 2. **Business Analytics Mode** 📊 **NEW!**
 - 🔍 **Qwen Churn Assistant**: Specialized customer churn analysis
@@ -16,9 +15,10 @@ This project provides a **fully local AI infrastructure** with two specialized m
 ## 🚀 Key Features
 
 - **Private & Secure**: All computation happens locally on your hardware
+- **🚀 CUDA-Enabled Performance**: GPU acceleration for optimal inference speed
+- **🔐 Secure Remote Access**: Multi-platform access via **Tailscale** (browser, IDE, mobile)
 - **Template-Driven Architecture**: Modular, maintainable configuration system
 - **Multi-Model Support**: Code generation, chat, and specialized business analytics
-- **Multi-Platform Access**: Browser, IDE, or mobile (via Tailscale)
 - **GPU/CPU Flexibility**: Optimized for both GPU acceleration and CPU-only mode
 - **Business Intelligence**: Transform raw data into actionable insights
 
