@@ -232,3 +232,48 @@ class UtilityManager:
                 return None, f"Could not get logs: {result.stderr}"
         except Exception as e:
             return None, f"Error getting logs: {e}"
+    
+    @staticmethod
+    def detect_running_mode(container_name):
+        """
+        Detect whether a container is running in CPU or GPU mode
+        by checking container environment variables and runtime
+        
+        Args:
+            container_name (str): Name of the container to check
+        
+        Returns:
+            str: "cpu" or "gpu" or "unknown"
+        """
+        try:
+            client = docker.from_env()
+            
+            # Check the specified container
+            try:
+                container = client.containers.get(container_name)
+                
+                # Check for GPU runtime
+                host_config = container.attrs.get('HostConfig', {})
+                device_requests = host_config.get('DeviceRequests', [])
+                
+                # If container has GPU device requests, it's GPU mode
+                if device_requests:
+                    for device_request in device_requests:
+                        if device_request.get('Driver') == 'nvidia':
+                            return "gpu"
+                
+                # Check environment variables for CUDA/GPU indicators
+                env_vars = container.attrs.get('Config', {}).get('Env', [])
+                for env_var in env_vars:
+                    if 'CUDA' in env_var or 'GPU' in env_var:
+                        return "gpu"
+                
+                # If no GPU indicators found, assume CPU mode
+                return "cpu"
+                
+            except docker.errors.NotFound:
+                return "unknown"
+                
+        except Exception as e:
+            print(f"   ⚠️  Could not detect running mode for {container_name}: {e}")
+            return "unknown"
