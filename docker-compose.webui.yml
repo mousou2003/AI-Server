@@ -19,36 +19,25 @@ services:
       - ENABLE_MEMORY=${ENABLE_MEMORY:-true}
       - ENABLE_TOOLS=${ENABLE_TOOLS:-true}
       - TOOLS_FUNCTION_CALLING_ENABLED=${TOOLS_FUNCTION_CALLING_ENABLED:-true}
-      # Large payload optimizations
-      - WEBUI_REQUEST_TIMEOUT=600      # Extended to 10 minutes
-      - WEBUI_MAX_FILE_SIZE=50m
-      - OLLAMA_REQUEST_TIMEOUT=600     # Match WebUI timeout
-      # Memory and processing optimizations
-      - WEBUI_CHUNK_SIZE=4m            # Smaller chunks for stability
-      - WEBUI_MAX_CONCURRENT_REQUESTS=1  # Serialize large requests
+      # Standard configuration for laptop use (supports up to 20MB payloads)
+      - WEBUI_REQUEST_TIMEOUT=120      # 2 minutes for normal requests
+      - WEBUI_MAX_FILE_SIZE=20m        # 20MB limit (covers 16MB + overhead)
+      - OLLAMA_REQUEST_TIMEOUT=120     # Match WebUI timeout
     volumes:
       - open-webui:/app/backend/data
     restart: unless-stopped
-    # Add ulimits for large file processing
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
-    # Add tmpfs for temporary processing
-    tmpfs:
-      - /tmp:size=2g,exec
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "curl", "-f", "http://localhost:8080/", "||", "exit", "1"]
-      interval: 60s   # Longer interval for large processing
-      timeout: 30s    # Increased timeout
-      retries: 5
-      start_period: 180s  # Give WebUI 3 minutes to fully initialize
+      interval: 30s   # Standard interval
+      timeout: 10s    # Standard timeout
+      retries: 3
+      start_period: 120s  # Standard startup time
     deploy:
       resources:
         limits:
-          memory: ${WEBUI_MEM_LIMIT:-10g}  # Increased for 16MB payload processing
+          memory: ${WEBUI_MEM_LIMIT:-3g}  # Reduced for memory-constrained laptop
         reservations:
-          memory: ${WEBUI_MEM_RESERVATION:-6g}  # Higher reservation for stability
+          memory: ${WEBUI_MEM_RESERVATION:-1g}  # Minimal reservation
     networks:
       - ai_network
 

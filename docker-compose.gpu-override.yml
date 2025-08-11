@@ -9,17 +9,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 22g  # 7B model + GPU overhead + large payload
+          memory: 32g  # Proper allocation for 64GB system with GPU + large payloads
         reservations:
-          memory: 14g   # Just enough for 7B model (more efficient GPU transfers)
+          memory: 20g  # Adequate reservation for 7B model + GPU overhead
           devices:
             - capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      # RTX 3060 Ti (8GB VRAM) optimized settings for large payloads
+      # RTX 3060 Ti (8GB VRAM) - let Ollama auto-detect optimal layers
       - OLLAMA_FLASH_ATTENTION=true
-      # Realistic GPU layer count for 8GB VRAM
-      - OLLAMA_NUM_GPU=25  # Optimized for RTX 3060 Ti
-      # Large payload GPU optimizations
+      # Auto-detect GPU layers (removes manual override)
+      # - OLLAMA_NUM_GPU=30  # Commented out for auto-detection
+      # Optimized timeouts for GPU + large payload processing
       - OLLAMA_REQUEST_TIMEOUT=600  # Extended for GPU processing
-      - OLLAMA_GPU_MEMORY_FRACTION=0.9
+      - OLLAMA_GPU_MEMORY_FRACTION=0.95  # Maximize GPU VRAM usage

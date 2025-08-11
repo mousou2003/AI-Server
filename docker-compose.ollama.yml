@@ -17,24 +17,24 @@ services:
       - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_FLASH_ATTENTION=false
-      # Large payload optimizations
-      - OLLAMA_REQUEST_TIMEOUT=300
-      - OLLAMA_KEEP_ALIVE=5m
-      - OLLAMA_MAX_REQUEST_SIZE=50m
-      - OLLAMA_LOAD_TIMEOUT=10m
-    # CPU-friendly memory limits (optimized for 7B model + large payloads)
+      # Standard timeouts (sufficient for normal use)
+      - OLLAMA_REQUEST_TIMEOUT=120     # 2 minutes for normal requests
+      - OLLAMA_KEEP_ALIVE=2m           # Keep models loaded briefly
+      - OLLAMA_MAX_REQUEST_SIZE=10m    # 10MB limit for normal use
+      - OLLAMA_LOAD_TIMEOUT=5m         # Standard model loading
+    # Laptop-friendly memory limits (optimized for 16GB available memory)
     deploy:
       resources:
         limits:
-          memory: 20g  # Sufficient for 7B model (14GB) + 16MB payload (6GB headroom)
+          memory: 12g  # Conservative limit for 7B model on memory-constrained laptop
         reservations:
-          memory: 16g  # Reserve enough for 7B model
+          memory: 8g   # Minimum needed for 7B model
     healthcheck:
       test: ["CMD", "ollama", "list"]
-      interval: 60s  # Longer interval for large processing
-      timeout: 30s   # Increased timeout for large requests
-      retries: 10
-      start_period: 120s  # More time for initial startup
+      interval: 30s  # Standard interval for laptop use
+      timeout: 15s   # Standard timeout
+      retries: 5
+      start_period: 60s  # Normal startup time
     networks:
       - ai_network
 
