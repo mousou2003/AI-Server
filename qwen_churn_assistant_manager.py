@@ -497,6 +497,17 @@ class QwenChurnAssistantManager:
         if prompt_configured:
             self.config["custom_model_name"] = custom_model_name
         
+        # Warm up the model to ensure it's loaded and ready for immediate use
+        print("\n🔥 Warming up model for immediate responsiveness...")
+        model_to_warm = custom_model_name if prompt_configured else self.config["model_name"]
+        warm_up_success = self._warm_up_model(model_to_warm)
+        
+        if warm_up_success:
+            print("   ✅ Model is loaded and ready for immediate use")
+        else:
+            print("   ⚠️  Model warm-up failed, but infrastructure is running")
+            print("   💡 First question may take longer to respond")
+
         # Success message
         mode_info = "CPU-only" if self.config['cpu_mode'] else "GPU-accelerated"
         print("\n" + "=" * 60)
@@ -971,6 +982,43 @@ class QwenChurnAssistantManager:
             return False
         except Exception as e:
             print(f"   ❌ Error during responsiveness check: {e}")
+            return False
+    
+    def _warm_up_model(self, model_name):
+        """Warm up the model during deployment to ensure immediate responsiveness
+        
+        Args:
+            model_name (str): Name of the model to warm up
+            
+        Returns:
+            bool: True if warm-up successful, False otherwise
+        """
+        print(f"   🎯 Loading model into memory: {model_name}")
+        
+        try:
+            import subprocess
+            
+            # Use a simple warm-up prompt
+            warm_up_prompt = "Hi"
+            
+            # Give more time for initial model loading (90 seconds)
+            result = subprocess.run([
+                "docker", "exec", "ollama-qwen-churn", 
+                "ollama", "run", model_name, warm_up_prompt
+            ], capture_output=True, text=True, timeout=90, encoding='utf-8', errors='replace')
+            
+            if result.returncode == 0 and result.stdout.strip():
+                return True
+            else:
+                if result.stderr:
+                    print(f"   📋 Error during warm-up: {result.stderr.strip()}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            print(f"   ❌ Model warm-up timed out (90s)")
+            return False
+        except Exception as e:
+            print(f"   ❌ Error during model warm-up: {e}")
             return False
     
     def _run_model_test(self, model_name, prompt, timeout=180):
