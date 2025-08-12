@@ -20,6 +20,8 @@ import traceback
 from subprocess import TimeoutExpired
 import tempfile
 from pathlib import Path
+import shutil
+import stat
 
 # Import existing managers
 from utility_manager import UtilityManager
@@ -291,24 +293,96 @@ class QwenChurnAssistantManager:
             additional_args=additional_args
         )
     
-    def cleanup_all(self, remove_volumes=False):
-        """Comprehensive cleanup including containers, images, and optionally volumes"""
+    def cleanup_all(self):
+        """Comprehensive cleanup: removes containers, volumes, and ALL Ollama models"""
         print("🧹 Performing comprehensive cleanup...")
+        print("   This will remove:")
+        print("   - All Docker containers and volumes")
+        print("   - ALL Ollama models (including base models)")
+        print("   - Complete .ollama directory")
         
-        # Stop infrastructure and optionally remove volumes
-        self.stop_infrastructure(remove_volumes=remove_volumes)
+        # Remove all Ollama models first
+        print("🗑️  Removing ALL Ollama models...")
+        self._cleanup_ollama_models()
         
-        # If we didn't remove volumes via compose, try manual removal
-        if remove_volumes:
-            volume_names = [
-                "qwen-churn-assistant-data",
-                "qwen-churn-assistant-memory", 
-                "qwen-churn-assistant-workspace"
-            ]
+        # Stop infrastructure and remove volumes
+        self.stop_infrastructure(remove_volumes=True)
+        
+        # Manual volume cleanup if needed
+        volume_names = [
+            "qwen-churn-assistant-data",
+            "qwen-churn-assistant-memory", 
+            "qwen-churn-assistant-workspace"
+        ]
+        
+        self.utility_manager.cleanup_docker_volumes(volume_names, "qwen-churn-assistant")
+        
+        # Remove .ollama directory for clean slate
+        print("🗂️  Removing .ollama directory...")
+        self._cleanup_ollama_directory()
+        
+        print("✅ Comprehensive cleanup completed (containers, volumes, and models removed)")
+    
+    def _cleanup_ollama_models(self):
+        """Remove all Ollama models from the running container"""
+        try:
+            # Check if container is running first
+            is_running, _ = self.ollama_manager.get_api_status(11434)
             
-            self.utility_manager.cleanup_docker_volumes(volume_names, "qwen-churn-assistant")
+            if not is_running:
+                print("   ℹ️  Ollama container not running - models will be removed with directory cleanup")
+                return
+            
+            print("   📋 Listing current models...")
+            try:
+                models = self.ollama_manager.list_models()
+                if isinstance(models, list) and models:
+                    print(f"   📊 Found {len(models)} models to remove")
+                    
+                    for model in models:
+                        print(f"   🗑️  Removing model: {model}")
+                        try:
+                            remove_cmd = f"docker exec ollama-qwen-churn ollama rm {model}"
+                            result = self.utility_manager.run_subprocess(remove_cmd, check=False)
+                            
+                            if result.returncode == 0:
+                                print(f"      ✅ Removed: {model}")
+                            else:
+                                print(f"      ⚠️  Warning: Could not remove {model}: {result.stderr}")
+                        except Exception as e:
+                            print(f"      ❌ Error removing {model}: {e}")
+                else:
+                    print("   ℹ️  No models found to remove")
+            except Exception as e:
+                print(f"   ❌ Error listing models: {e}")
+                
+        except Exception as e:
+            print(f"   ❌ Error during model cleanup: {e}")
+    
+    def _cleanup_ollama_directory(self):
+        """Remove the entire .ollama directory to ensure clean slate"""
+        ollama_dir = Path(".ollama")
         
-        print("✅ Comprehensive cleanup completed")
+        if ollama_dir.exists():
+            print(f"   🗂️  Removing .ollama directory: {ollama_dir.absolute()}")
+            try:
+                # On Windows, we might need to handle permissions carefully
+                if os.name == 'nt':  # Windows
+                    def handle_remove_readonly(func, path, exc):
+                        if os.path.exists(path):
+                            os.chmod(path, stat.S_IWRITE)
+                            func(path)
+                    
+                    shutil.rmtree(ollama_dir, onerror=handle_remove_readonly)
+                else:
+                    shutil.rmtree(ollama_dir)
+                
+                print(f"      ✅ Removed .ollama directory")
+            except Exception as e:
+                print(f"      ❌ Error removing .ollama directory: {e}")
+                print(f"      💡 You may need to remove it manually: {ollama_dir.absolute()}")
+        else:
+            print(f"   ℹ️  .ollama directory not found (already clean)")
     
     def start_infrastructure(self):
         """Start the complete Qwen Churn Assistant infrastructure"""
@@ -699,10 +773,15 @@ class QwenChurnAssistantManager:
             elif stderr:
                 print("STDERR:", stderr)
 
-    def test_custom_model(self):
-        """Test the custom churn model to verify it's working correctly"""
+    def test_custom_model(self, quick_mode=False):
+        """Test the custom churn model to verify it's working correctly with our streamlined prompt template
+        
+        Args:
+            quick_mode (bool): If True, run only basic connectivity and responsiveness tests
+        """
         mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
-        print(f"🧪 Testing Custom Churn Model ({mode_info})")
+        test_type = "Quick" if quick_mode else "Comprehensive"
+        print(f"🧪 Testing Custom Churn Model - {test_type} ({mode_info})")
         print("=" * 50)
         
         # Check if Ollama is running
@@ -731,81 +810,441 @@ class QwenChurnAssistantManager:
         
         print(f"✅ Custom model '{expected_custom_model_name}' is available")
         
-        # Run the test
-        test_prompt = "I have customer churn data and need help analyzing termination risk. Can you help?"
+        # Validate template file exists and is valid
+        print("\n🔍 Validating prompt template...")
+        if not self._validate_prompt_template():
+            return False
         
-        print(f"\n🧪 Testing with prompt:")
-        print(f"   '{test_prompt}'")
-        print("\n📝 Response:")
-        print("-" * 40)
+        # Quick model responsiveness check before running full tests
+        print("\n🏃 Quick model responsiveness check...")
+        if not self._quick_model_check(expected_custom_model_name):
+            print("💡 Model appears to be slow or unresponsive. This could be due to:")
+            print("   - First-time model loading (can take 2-5 minutes)")
+            print("   - System resource constraints")
+            print("   - Model not fully initialized")
+            print("\n🔧 Try these solutions:")
+            print("   1. Wait a few minutes and run the test again")
+            print("   2. Check container logs: docker logs ollama-qwen-churn")
+            print("   3. Restart the infrastructure if needed")
+            return False
+        
+        # If quick mode, just return success after basic checks
+        if quick_mode:
+            print("\n✅ Quick test completed successfully!")
+            print("💡 Basic model connectivity and responsiveness confirmed")
+            print(f"💡 You can now use '{expected_custom_model_name}' in the WebUI")
+            print("\n📝 To run comprehensive tests:")
+            print("   python start_qwen_churn_assistant.py --test")
+            return True
+        
+        # Run comprehensive tests
+        print("\n🧪 Running comprehensive model tests...")
+        test_results = []
+        
+        # Test 1: Basic role understanding
+        test_results.append(self._test_basic_role_understanding(expected_custom_model_name))
+        
+        # Test 2: Question type recognition (exploratory)
+        test_results.append(self._test_exploratory_questions(expected_custom_model_name))
+        
+        # Test 3: Question type recognition (specific queries)
+        test_results.append(self._test_specific_queries(expected_custom_model_name))
+        
+        # Test 4: Question type recognition (strategic)
+        test_results.append(self._test_strategic_questions(expected_custom_model_name))
+        
+        # Test 5: Business definitions understanding
+        test_results.append(self._test_business_definitions(expected_custom_model_name))
+        
+        # Test 6: Statistical insights capability
+        test_results.append(self._test_statistical_insights(expected_custom_model_name))
+        
+        # Calculate overall results
+        passed_tests = sum(1 for result in test_results if result)
+        total_tests = len(test_results)
+        
+        print(f"\n📊 Test Results Summary:")
+        print("=" * 50)
+        print(f"✅ Passed: {passed_tests}/{total_tests} tests")
+        print(f"❌ Failed: {total_tests - passed_tests}/{total_tests} tests")
+        
+        if passed_tests == total_tests:
+            print("\n🎉 All tests passed! The model is working correctly.")
+            print(f"💡 You can now use '{expected_custom_model_name}' in the WebUI")
+            print("\n📝 Next steps:")
+            print("   1. Open WebUI at http://localhost:3000")
+            print(f"   2. Select '{expected_custom_model_name}' as your model")
+            print("   3. Start analyzing your churn data!")
+            return True
+        elif passed_tests >= total_tests * 0.7:  # 70% pass rate
+            print("\n⚠️  Most tests passed, but some issues detected.")
+            print("� The model should work for basic churn analysis.")
+            print("🔧 Consider rebuilding if you encounter issues:")
+            print(f"   python start_qwen_churn_assistant.py --cpu --rebuild-model" if self.cpu_mode else f"   python start_qwen_churn_assistant.py --rebuild-model")
+            return True
+        else:
+            print("\n❌ Multiple test failures detected.")
+            print("🔧 Please rebuild the custom model:")
+            print(f"   python start_qwen_churn_assistant.py --cpu --rebuild-model" if self.cpu_mode else f"   python start_qwen_churn_assistant.py --rebuild-model")
+            print("\n💡 If tests keep timing out, try:")
+            print("   1. Restart the infrastructure to clear any stuck processes")
+            print("   2. Check available system resources")
+            print("   3. Run a basic model verification instead")
+            return False
+    
+    def _validate_prompt_template(self):
+        """Validate that the prompt template file exists and is properly structured"""
+        template_path = Path("templates/qwen_churn_system_prompt.template.json")
+        
+        if not template_path.exists():
+            print(f"❌ Template file not found: {template_path}")
+            return False
+        
+        try:
+            import json
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template = json.load(f)
+            
+            # Check for required sections
+            required_sections = ['name', 'description', 'system_prompt', 'dataset_knowledge', 'constraints', 'response_format']
+            missing_sections = [section for section in required_sections if section not in template]
+            
+            if missing_sections:
+                print(f"❌ Template missing required sections: {missing_sections}")
+                return False
+            
+            # Check response_format structure
+            response_format = template.get('response_format', {})
+            required_rf_sections = ['analysis_workflow', 'style_guidelines', 'structure', 'response_guidelines']
+            missing_rf_sections = [section for section in required_rf_sections if section not in response_format]
+            
+            if missing_rf_sections:
+                print(f"❌ response_format missing sections: {missing_rf_sections}")
+                return False
+            
+            # Check response_guidelines has the expected question types
+            response_guidelines = response_format.get('response_guidelines', {})
+            expected_question_types = ['exploratory_questions', 'specific_queries', 'strategic_business_questions', 'pattern_analysis']
+            missing_question_types = [qt for qt in expected_question_types if qt not in response_guidelines]
+            
+            if missing_question_types:
+                print(f"❌ response_guidelines missing question types: {missing_question_types}")
+                return False
+            
+            print("✅ Template validation passed")
+            return True
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ Template JSON parsing error: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Template validation error: {e}")
+            return False
+    
+    def _quick_model_check(self, model_name):
+        """Quick check to see if the model is responsive before running full tests"""
+        print(f"   🎯 Testing basic model responsiveness...")
         
         try:
             import subprocess
             
-            # Increase timeout for large models
-            timeout_seconds = 120 if "14b" in expected_custom_model_name else 60
-            print(f"   ⏰ Using {timeout_seconds}s timeout for {'large' if '14b' in expected_custom_model_name else 'standard'} model")
+            # Use a very simple prompt that should respond quickly
+            simple_prompt = "Hi"
             
-            # Run the test command with proper encoding handling
+            # Short timeout for quick check
             result = subprocess.run([
                 "docker", "exec", "ollama-qwen-churn", 
-                "ollama", "run", expected_custom_model_name, 
-                test_prompt
-            ], capture_output=True, text=True, timeout=timeout_seconds, encoding='utf-8', errors='replace')
+                "ollama", "run", model_name, simple_prompt
+            ], capture_output=True, text=True, timeout=30, encoding='utf-8', errors='replace')
             
-            if result.returncode == 0:
-                response = result.stdout.strip()
-                print(response)
-                
-                # Analyze the response
-                business_keywords = [
-                    "business", "customer", "churn", "analysis", 
-                    "retention", "segments", "patterns", "risk",
-                    "data", "insights", "recommendations"
-                ]
-                
-                privacy_keywords = [
-                    "privacy", "personal data", "confidential", 
-                    "can't provide", "protected under", "sorry"
-                ]
-                
-                business_score = sum(1 for keyword in business_keywords if keyword.lower() in response.lower())
-                privacy_score = sum(1 for keyword in privacy_keywords if keyword.lower() in response.lower())
-                
-                print(f"\n📊 Analysis Results:")
-                print(f"   Business Keywords Found: {business_score}")
-                print(f"   Privacy Keywords Found: {privacy_score}")
-                
-                if business_score >= 3 and privacy_score == 0:
-                    print("   ✅ PASS: Model is responding as business churn analyst")
-                    print("\n🎉 Test completed successfully!")
-                    print(f"💡 You can now use '{expected_custom_model_name}' in the WebUI")
-                    return True
-                elif privacy_score > 0:
-                    print("   ❌ FAIL: Model still showing privacy/HR response behavior")
-                    print("💡 Try rebuilding the custom model:")
-                    print(f"   python start_qwen_churn_assistant.py --cpu --rebuild-model" if self.cpu_mode else f"   python start_qwen_churn_assistant.py --rebuild-model")
-                    return False
-                else:
-                    print("   ⚠️  UNCERTAIN: Response unclear or insufficient business keywords")
-                    print("💡 Manual review recommended - check the response above")
-                    return False
-                    
+            if result.returncode == 0 and result.stdout.strip():
+                print(f"   ✅ Model is responsive")
+                return True
             else:
-                print(f"❌ Error running test: {result.stderr}")
+                print(f"   ❌ Model not responding or returned empty response")
+                if result.stderr:
+                    print(f"   📋 Error: {result.stderr.strip()}")
                 return False
                 
         except subprocess.TimeoutExpired:
-            model_size = "14B" if "14b" in expected_custom_model_name else "7B"
-            timeout_used = 120 if "14b" in expected_custom_model_name else 60
-            print(f"❌ Test timed out after {timeout_used} seconds")
-            if "14b" in expected_custom_model_name:
-                print("💡 14B model may be tight on RTX 3060 Ti (8GB VRAM)")
-                print("💡 Try using the optimized 7B model instead:")
-                print(f"   python start_qwen_churn_assistant.py --test")
-            else:
-                print("💡 The model might be loading for the first time, try again")
+            print(f"   ❌ Model responsiveness check timed out (30s)")
             return False
         except Exception as e:
-            print(f"❌ Error running test: {e}")
+            print(f"   ❌ Error during responsiveness check: {e}")
+            return False
+    
+    def _run_model_test(self, model_name, prompt, timeout=180):
+        """Helper method to run a single test against the model"""
+        try:
+            import subprocess
+            
+            # Create optimized test command with shorter response limits
+            optimized_prompt = f"{prompt} (Please provide a brief, focused response in 2-3 sentences.)"
+            
+            # Use ollama run with options for faster inference
+            cmd = [
+                "docker", "exec", "ollama-qwen-churn", 
+                "ollama", "run", model_name,
+                "--verbose",  # Add verbose to see what's happening
+                optimized_prompt
+            ]
+            
+            print(f"   🔄 Running test (timeout: {timeout}s)...")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True, 
+                text=True, 
+                timeout=timeout, 
+                encoding='utf-8', 
+                errors='replace'
+            )
+            
+            if result.returncode == 0:
+                response = result.stdout.strip()
+                if response:
+                    print(f"   📝 Response received ({len(response)} chars)")
+                    return response
+                else:
+                    print(f"   ⚠️  Empty response received")
+                    return None
+            else:
+                error_msg = result.stderr.strip()
+                print(f"   ❌ Model execution error: {error_msg}")
+                
+                # Check for specific error types
+                if "model not found" in error_msg.lower():
+                    print(f"   💡 Model '{model_name}' might not be properly loaded")
+                elif "connection refused" in error_msg.lower():
+                    print(f"   💡 Ollama service might not be fully ready")
+                
+                return None
+                
+        except subprocess.TimeoutExpired:
+            print(f"   ⏰ Test timed out after {timeout} seconds")
+            print(f"   💡 Model might be loading for the first time or under heavy load")
+            print(f"   💡 Current CPU usage suggests the system isn't fully utilized")
+            return None
+        except Exception as e:
+            print(f"   ❌ Test execution error: {e}")
+            return None
+    
+    def _test_basic_role_understanding(self, model_name):
+        """Test 1: Basic role understanding"""
+        print("\n1️⃣ Testing basic role understanding...")
+        
+        prompt = "What is your role and how can you help me?"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Check for key role indicators
+        role_keywords = [
+            "churn analysis", "churn analyst", "customer churn", 
+            "retention", "business insights", "wine club", "membership"
+        ]
+        
+        found_keywords = [kw for kw in role_keywords if kw.lower() in response.lower()]
+        
+        if len(found_keywords) >= 2:
+            print(f"   ✅ Role understanding confirmed (found: {', '.join(found_keywords)})")
+            return True
+        else:
+            print(f"   ❌ Role understanding unclear (found: {', '.join(found_keywords)})")
+            print(f"   📄 Response: {response[:200]}...")
+            return False
+    
+    def _test_exploratory_questions(self, model_name):
+        """Test 2: Exploratory question type recognition"""
+        print("\n2️⃣ Testing exploratory question recognition...")
+        
+        prompt = "What does the data show about customer churn patterns?"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Should focus on steps 1-2 (Key Finding + Supporting Evidence)
+        # Should NOT include forced business implications or actions
+        unwanted_phrases = [
+            "recommended action", "next steps", "you should implement",
+            "strategy", "intervention", "retention program"
+        ]
+        
+        found_unwanted = [phrase for phrase in unwanted_phrases if phrase.lower() in response.lower()]
+        
+        if found_unwanted:
+            print(f"   ❌ Found forced business advice in exploratory response: {found_unwanted}")
+            return False
+        
+        # Should focus on data and evidence
+        data_phrases = [
+            "data shows", "pattern", "analysis", "finding", "evidence", 
+            "percentage", "rate", "segment", "trend"
+        ]
+        
+        found_data = [phrase for phrase in data_phrases if phrase.lower() in response.lower()]
+        
+        if len(found_data) >= 2:
+            print(f"   ✅ Appropriate exploratory response (found: {', '.join(found_data)})")
+            return True
+        else:
+            print(f"   ❌ Response doesn't focus on data/evidence enough")
+            print(f"   📄 Response: {response[:200]}...")
+            return False
+    
+    def _test_specific_queries(self, model_name):
+        """Test 3: Specific query type recognition"""
+        print("\n3️⃣ Testing specific query recognition...")
+        
+        prompt = "Give me the membership IDs of customers at risk of churning"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Should provide direct answer without forced implications
+        direct_response_indicators = [
+            "membership id", "customer id", "guid", "list", "members",
+            "specific", "following", "these customers", "at risk"
+        ]
+        
+        found_indicators = [ind for ind in direct_response_indicators if ind.lower() in response.lower()]
+        
+        # Should NOT include forced business steps
+        business_forcing = [
+            "business implication", "recommended action", "strategy",
+            "what this means for the company", "next steps"
+        ]
+        
+        found_forcing = [phrase for phrase in business_forcing if phrase.lower() in response.lower()]
+        
+        if len(found_indicators) >= 2 and not found_forcing:
+            print(f"   ✅ Direct query response confirmed (found: {', '.join(found_indicators)})")
+            return True
+        else:
+            print(f"   ❌ Response not appropriately direct")
+            if found_forcing:
+                print(f"   ❌ Found forced business content: {found_forcing}")
+            print(f"   📄 Response: {response[:200]}...")
+            return False
+    
+    def _test_strategic_questions(self, model_name):
+        """Test 4: Strategic question type recognition"""
+        print("\n4️⃣ Testing strategic question recognition...")
+        
+        prompt = "What should we do about high churn rates in our premium segment?"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Should include strategic elements (steps 1-5 when relevant)
+        strategic_elements = [
+            "recommendation", "action", "strategy", "implement", 
+            "should", "could", "suggest", "consider", "plan"
+        ]
+        
+        found_strategic = [elem for elem in strategic_elements if elem.lower() in response.lower()]
+        
+        # Should also include analytical foundation
+        analytical_elements = [
+            "data", "analysis", "finding", "evidence", "pattern", "segment"
+        ]
+        
+        found_analytical = [elem for elem in analytical_elements if elem.lower() in response.lower()]
+        
+        if len(found_strategic) >= 2 and len(found_analytical) >= 2:
+            print(f"   ✅ Strategic response confirmed (strategic: {', '.join(found_strategic[:3])}, analytical: {', '.join(found_analytical[:3])})")
+            return True
+        else:
+            print(f"   ❌ Strategic response incomplete")
+            print(f"   📊 Strategic elements: {found_strategic}")
+            print(f"   📈 Analytical elements: {found_analytical}")
+            return False
+    
+    def _test_business_definitions(self, model_name):
+        """Test 5: Business definitions understanding"""
+        print("\n5️⃣ Testing business definitions understanding...")
+        
+        prompt = "What's the difference between churn rate and termination rate?"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Should mention key differences from our definitions
+        definition_elements = [
+            "churn rate", "termination rate", "cancelled", "onhold", 
+            "percentage", "customers", "active", "formal", "subset"
+        ]
+        
+        found_elements = [elem for elem in definition_elements if elem.lower() in response.lower()]
+        
+        # Should demonstrate understanding of wine club context
+        wine_context = [
+            "wine club", "membership", "shipment", "winery"
+        ]
+        
+        found_context = [ctx for ctx in wine_context if ctx.lower() in response.lower()]
+        
+        if len(found_elements) >= 4 and len(found_context) >= 1:
+            print(f"   ✅ Business definitions confirmed (definitions: {', '.join(found_elements[:4])}, context: {', '.join(found_context)})")
+            return True
+        else:
+            print(f"   ❌ Business definitions understanding unclear")
+            print(f"   📚 Definition elements: {found_elements}")
+            print(f"   🍷 Wine context: {found_context}")
+            return False
+    
+    def _test_statistical_insights(self, model_name):
+        """Test 6: Statistical insights capability"""
+        print("\n6️⃣ Testing statistical insights capability...")
+        
+        prompt = "If I have 1000 customers and 150 churned, what insights can you provide?"
+        response = self._run_model_test(model_name, prompt)
+        
+        if not response:
+            print("   ❌ No response received")
+            return False
+        
+        # Should include statistical analysis
+        statistical_elements = [
+            "15%", "percentage", "rate", "ratio", "150", "1000",
+            "proportion", "metric", "calculate", "analysis"
+        ]
+        
+        found_statistical = [elem for elem in statistical_elements if elem.lower() in response.lower()]
+        
+        # Should provide business context
+        business_elements = [
+            "benchmark", "industry", "segment", "pattern", "trend",
+            "business", "insight", "finding", "implication"
+        ]
+        
+        found_business = [elem for elem in business_elements if elem.lower() in response.lower()]
+        
+        # Should NOT refuse to do calculations or provide statistics
+        refusal_phrases = [
+            "can't calculate", "unable to provide", "don't have access",
+            "need more context", "cannot determine", "insufficient data"
+        ]
+        
+        found_refusal = [phrase for phrase in refusal_phrases if phrase.lower() in response.lower()]
+        
+        if len(found_statistical) >= 3 and len(found_business) >= 2 and not found_refusal:
+            print(f"   ✅ Statistical insights confirmed (stats: {', '.join(found_statistical[:3])}, business: {', '.join(found_business[:2])})")
+            return True
+        else:
+            print(f"   ❌ Statistical insights inadequate")
+            if found_refusal:
+                print(f"   ❌ Found statistical refusal: {found_refusal}")
+            print(f"   📊 Statistical elements: {found_statistical}")
+            print(f"   💼 Business elements: {found_business}")
             return False

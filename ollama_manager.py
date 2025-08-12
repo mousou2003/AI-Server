@@ -2,6 +2,7 @@ import time
 import requests
 import subprocess
 import docker
+import json
 from pathlib import Path
 from utility_manager import UtilityManager
 
@@ -182,130 +183,71 @@ class OllamaManager:
         List all models in Ollama
         
         Returns:
-            str: Output from ollama list command, or empty string if failed
+            list: List of model names, or empty list if failed
         """
         try:
             cmd = f'docker exec {self.config["name"]} ollama list'
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True,
-                                  encoding='utf-8', errors='ignore', timeout=30)
+            result = UtilityManager.run_subprocess(cmd, check=False, timeout=30)
             
             if result.returncode == 0:
-                return result.stdout
+                # Parse the output to extract model names
+                lines = result.stdout.strip().split('\n')
+                models = []
+                for line in lines[1:]:  # Skip header line
+                    if line.strip():
+                        model_name = line.split()[0]  # First column is model name
+                        models.append(model_name)
+                return models
             else:
                 print(f"   ❌ Could not list models: {result.stderr}")
-                return ""
+                return []
                 
         except Exception as e:
             print(f"   ❌ Error listing models: {e}")
-            return ""
+            return []
     
-    def load_system_prompt_from_template(self, templates_dir, template_name="qwen_churn_system_prompt.template.json"):
+    def setup_specialized_churn_model(self, base_model_name, 
+                                     template_name="qwen_churn_system_prompt.template.json",
+                                     custom_suffix="churn",
+                                     templates_path="templates"):
         """
-        Load system prompt from template file (supports both JSON and Markdown)
-        
-        Args:
-            templates_dir (Path): Path to templates directory
-            template_name (str): Name of template file
-            
-        Returns:
-            str: System prompt content
-        """
-        prompt_file = Path(templates_dir) / template_name
-        
-        if not prompt_file.exists():
-            raise FileNotFoundError(f"Template file not found: {prompt_file}")
-        
-        # Read the template file
-        with open(prompt_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Handle JSON template files
-        if template_name.endswith('.json'):
-            import json
-            try:
-                template_data = json.loads(content)
-                if 'system_prompt' in template_data:
-                    prompt_content = template_data['system_prompt']
-                    print(f"   ✅ Loaded system prompt from JSON template: {prompt_file}")
-                    return prompt_content
-                else:
-                    raise ValueError("JSON template missing 'system_prompt' field")
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in template file: {e}")
-        
-        # Handle Markdown template files (legacy support)
-        elif template_name.endswith('.md'):
-            # Extract the prompt content (skip the markdown header)
-            lines = content.split('\n')
-            # Find the first line after the main title and start from there
-            start_idx = 0
-            for i, line in enumerate(lines):
-                if line.startswith('# ') and i == 0:
-                    continue
-                elif line.strip() == '' and i <= 3:
-                    continue
-                else:
-                    start_idx = i
-                    break
-            
-            prompt_content = '\n'.join(lines[start_idx:]).strip()
-            print(f"   ✅ Loaded system prompt from Markdown template: {prompt_file}")
-            return prompt_content
-        
-        else:
-            # Treat as plain text
-            prompt_content = content.strip()
-            print(f"   ✅ Loaded system prompt from text template: {prompt_file}")
-            return prompt_content
-    
-    def configure_specialized_model(self, base_model_name, system_prompt, models_dir, 
-                                  custom_suffix="churn", temperature=0.3, top_k=40, 
-                                  top_p=0.9, repeat_penalty=1.1):
-        """
-        Configure a specialized model with custom system prompt and parameters
+        Complete setup for specialized churn model - direct approach
         
         Args:
             base_model_name (str): Base model name (e.g., "qwen2.5:7b-instruct")
-            system_prompt (str): Custom system prompt
-            models_dir (Path): Directory to save the Modelfile
+            template_name (str): Name of template file
             custom_suffix (str): Suffix for custom model name
-            temperature (float): Model temperature setting
-            top_k (int): Top-k parameter
-            top_p (float): Top-p parameter
-            repeat_penalty (float): Repeat penalty parameter
+            templates_path (str): Path to templates directory
             
         Returns:
             tuple: (success: bool, custom_model_name: str)
         """
-        print("🔧 Configuring specialized model with custom prompt...")
+        print("🔧 Setting up specialized churn model...")
         
-        # Save Modelfile in models directory for persistence
+        # Read template file directly
+        template_file = Path(templates_path) / template_name
+        if not template_file.exists():
+            print(f"❌ Template file not found: {template_file}")
+            return False, base_model_name
+        
+        with open(template_file, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        
+        print(f"   ✅ Loaded template: {template_file}")
+        print(f"   📄 Template size: {len(template_content)} characters")
+        
+        # Setup models directory and create Modelfile path
+        models_dir = self.setup_models_directory()
         modelfile_path = Path(models_dir) / f"Modelfile.{base_model_name.replace(':', '-')}-{custom_suffix}"
         
-        # Create a Modelfile for Ollama with the system prompt
+        # Create minimal Modelfile with template as system prompt
         modelfile_content = f'''FROM {base_model_name}
 
-# Set parameters optimized for specialized use
-PARAMETER temperature {temperature}
-PARAMETER top_k {top_k}
-PARAMETER top_p {top_p}
-PARAMETER repeat_penalty {repeat_penalty}
-
-# System prompt for specialized analysis
-SYSTEM """{system_prompt}"""
-
-# Template for consistent responses
-TEMPLATE """{{{{ if .System }}}}<|im_start|>system
-{{{{ .System }}}}<|im_end|>
-{{{{ end }}}}{{{{ if .Prompt }}}}<|im_start|>user
-{{{{ .Prompt }}}}<|im_end|>
-{{{{ end }}}}<|im_start|>assistant
-"""
+SYSTEM """{template_content}"""
 '''
         
-        # Create the customized model
+        # Create the custom model
         custom_model_name = f"{base_model_name}-{custom_suffix}"
-        
         success = self.create_custom_model(
             base_model=base_model_name,
             custom_model_name=custom_model_name,
@@ -373,8 +315,7 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         models_dir.mkdir(parents=True, exist_ok=True)
         return models_dir
     
-    def setup_complete_infrastructure(self, project_name, 
-                                    models_path=".ollama"):
+    def setup_complete_infrastructure(self, project_name, models_path=".ollama"):
         """
         Complete infrastructure setup for models directory
         
@@ -384,49 +325,3 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         """
         # Setup models directory (Ollama-specific)
         self.setup_models_directory(models_path)
-        
-
-    
-    def setup_specialized_churn_model(self, base_model_name, 
-                                     template_name="qwen_churn_system_prompt.template.json",
-                                     custom_suffix="churn", temperature=0.3, top_k=40, 
-                                     top_p=0.9, repeat_penalty=1.1,
-                                     templates_path="templates"):
-        """
-        Complete setup for specialized churn model including prompt loading and model configuration
-        
-        Args:
-            base_model_name (str): Base model name (e.g., "qwen2.5:7b-instruct")
-            template_name (str): Name of template file
-            custom_suffix (str): Suffix for custom model name
-            temperature (float): Model temperature setting
-            top_k (int): Top-k parameter
-            top_p (float): Top-p parameter
-            repeat_penalty (float): Repeat penalty parameter
-            templates_path (str): Path to templates directory
-            
-        Returns:
-            tuple: (success: bool, custom_model_name: str)
-        """
-        # Get templates directory path
-        templates_dir = Path(templates_path)
-        
-        # Load system prompt
-        system_prompt = self.load_system_prompt_from_template(templates_dir, template_name)
-        
-        # Use internal models directory (create it if needed)
-        models_dir = self.setup_models_directory()
-        
-        # Configure specialized model
-        success, custom_model_name = self.configure_specialized_model(
-            base_model_name=base_model_name,
-            system_prompt=system_prompt,
-            models_dir=models_dir,
-            custom_suffix=custom_suffix,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            repeat_penalty=repeat_penalty
-        )
-        
-        return success, custom_model_name

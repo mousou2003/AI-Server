@@ -48,6 +48,7 @@ Examples:
   python start_qwen_churn_assistant.py --open       # Open WebUI in browser
   python start_qwen_churn_assistant.py --rebuild-model  # Rebuild custom churn model only
   python start_qwen_churn_assistant.py --test      # Test the custom churn model
+  python start_qwen_churn_assistant.py --quick-test  # Quick connectivity test
   python start_qwen_churn_assistant.py --cleanup-all  # Clean up everything including Docker volumes
 
 Notes:
@@ -79,8 +80,12 @@ Architecture:
                        help='Rebuild the custom churn model (requires running infrastructure)')
     parser.add_argument('--test', action='store_true',
                        help='Test the custom churn model to verify it\'s working correctly')
+    parser.add_argument('--quick-test', action='store_true',
+                       help='Quick test for basic model connectivity and responsiveness')
     parser.add_argument('--cleanup-all', action='store_true',
-                       help='Comprehensive cleanup including Docker volumes (WARNING: removes all churn assistant data)')
+                       help='Nuclear cleanup: removes containers, volumes, AND all Ollama models (WARNING: removes everything)')
+    parser.add_argument('--force', action='store_true',
+                       help='Force cleanup without confirmation (use with --cleanup-all for testing)')
     
     args = parser.parse_args()
     
@@ -102,20 +107,34 @@ Architecture:
             print("❌ Failed to rebuild custom model")
             sys.exit(1)
     elif args.test:
-        success = manager.test_custom_model()
+        success = manager.test_custom_model(quick_mode=False)
         if not success:
             print("❌ Test failed")
             sys.exit(1)
+    elif args.quick_test:
+        success = manager.test_custom_model(quick_mode=True)
+        if not success:
+            print("❌ Quick test failed")
+            sys.exit(1)
     elif args.cleanup_all:
-        print("⚠️  WARNING: This will remove ALL churn assistant data including Docker volumes!")
-        try:
-            response = input("Are you sure you want to proceed? (yes/no): ")
-            if response.lower() == 'yes':
-                manager.cleanup_all(remove_volumes=True)
-            else:
-                print("❌ Cleanup cancelled")
-        except KeyboardInterrupt:
-            print("\n❌ Cleanup cancelled")
+        print("🚨 NUCLEAR WARNING: This will remove EVERYTHING:")
+        print("   - All Docker containers and volumes")
+        print("   - ALL Ollama models (including qwen2.5:7b-instruct, qwen2.5-coder:7b, etc.)")
+        print("   - Complete .ollama directory")
+        print("   - You'll need to re-download all models from scratch")
+        
+        if args.force:
+            print("⚡ Force mode enabled - proceeding without confirmation")
+            manager.cleanup_all()
+        else:
+            try:
+                response = input("Are you absolutely sure? Type 'DELETE EVERYTHING' to confirm: ")
+                if response == 'DELETE EVERYTHING':
+                    manager.cleanup_all()
+                else:
+                    print("❌ Nuclear cleanup cancelled")
+            except KeyboardInterrupt:
+                print("\n❌ Nuclear cleanup cancelled")
     else:
         # Start infrastructure
         success = manager.start_infrastructure()
