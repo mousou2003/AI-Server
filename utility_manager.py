@@ -272,8 +272,10 @@ class UtilityManager:
                 return "cpu"
                 
             except docker.errors.NotFound:
+                # Container doesn't exist - this is expected after cleanup
                 return "unknown"
                 
-        except Exception as e:
-            print(f"   ⚠️  Could not detect running mode for {container_name}: {e}")
+        except Exception:
+            # Docker not available or other issues - don't print error messages
+            # as this is often expected (e.g., after cleanup)
             return "unknown"

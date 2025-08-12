@@ -14,10 +14,9 @@ class OllamaManager:
             "port": 11434,
             "url": "http://localhost:11434",
             "models": [
-                "qwen2.5-coder:7b",   # Qwen2.5-Coder 7B - Best coding model that fits 8GB VRAM
-                "gemma2:9b",          # Experimental - might work on 8GB but could be tight
-                # "qwen2.5-coder:32b",  # Too large for 8GB VRAM - disabled
-                # "gemma2:27b",         # Too large for 8GB VRAM - disabled
+                "qwen2.5:7b-instruct",   # Qwen2.5-Instruct 7B - General instruction following model that fits 8GB VRAM
+                "qwen2.5:14b-instruct",  # Qwen2.5-Instruct 14B - Larger model for better performance (may be tight on 8GB VRAM)
+                "gemma2:9b",             # Gemma2 9B - Alternative model, might work on 8GB but could be tight
             ]
         }
         
@@ -78,7 +77,7 @@ class OllamaManager:
         Create a custom model in Ollama with specified Modelfile content
         
         Args:
-            base_model (str): Base model name (e.g., "qwen2.5-coder:7b")
+            base_model (str): Base model name (e.g., "qwen2.5:7b-instruct")
             custom_model_name (str): Name for the custom model
             modelfile_content (str): Content of the Modelfile
             modelfile_path (str, optional): Local path to save the Modelfile
@@ -266,7 +265,7 @@ class OllamaManager:
         Configure a specialized model with custom system prompt and parameters
         
         Args:
-            base_model_name (str): Base model name (e.g., "qwen2.5-coder:7b")
+            base_model_name (str): Base model name (e.g., "qwen2.5:7b-instruct")
             system_prompt (str): Custom system prompt
             models_dir (Path): Directory to save the Modelfile
             custom_suffix (str): Suffix for custom model name
@@ -397,7 +396,7 @@ TEMPLATE """{{{{ if .System }}}}<|im_start|>system
         Complete setup for specialized churn model including prompt loading and model configuration
         
         Args:
-            base_model_name (str): Base model name (e.g., "qwen2.5-coder:7b")
+            base_model_name (str): Base model name (e.g., "qwen2.5:7b-instruct")
             template_name (str): Name of template file
             custom_suffix (str): Suffix for custom model name
             temperature (float): Model temperature setting

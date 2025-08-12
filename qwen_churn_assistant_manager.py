@@ -28,37 +28,42 @@ from webui_manager import WebUIManager
 
 
 class QwenChurnAssistantManager:
-    def __init__(self, cpu_mode=False, large_model=False):
+    def __init__(self, cpu_mode=False, large_model=False, quiet_mode=False):
         """
         Initialize the Qwen Churn Assistant Manager
         
         Args:
             cpu_mode (bool): If True, use CPU-only mode (no GPU acceleration)
-            large_model (bool): If True, force use of 32B model even in CPU mode
+            large_model (bool): If True, force use of 14B model even in CPU mode
+            quiet_mode (bool): If True, suppress startup messages (useful for status checks)
         """
         self.cpu_mode = cpu_mode
         self.large_model = large_model
+        self.quiet_mode = quiet_mode
         self.utility_manager = UtilityManager()
         
         # Qwen model selection for churn analysis
         # Optimized for RTX 3060 Ti (8GB VRAM) - use 7B model for both modes
         if cpu_mode and not large_model:
             # Use smaller model for CPU mode (much faster)
-            self.model_name = "qwen2.5-coder:7b"
-            print("🖥️  CPU-only mode enabled - using 7B model for better performance")
+            self.model_name = "qwen2.5:7b-instruct"
+            if not quiet_mode:
+                print("🖥️  CPU-only mode enabled - using 7B model for better performance")
         elif large_model:
             # Use full model only when explicitly requested
-            self.model_name = "qwen2.5-coder:32b"
-            print("⚠️  32B model requested - may be slow on RTX 3060 Ti (8GB VRAM)")
+            self.model_name = "qwen2.5:14b-instruct"
+            if not quiet_mode:
+                print("⚠️  14B model requested - may be tight on RTX 3060 Ti (8GB VRAM)")
         else:
             # Use 7B model for GPU mode too (RTX 3060 Ti optimized)
-            self.model_name = "qwen2.5-coder:7b"
-            print("🚀 GPU mode enabled - using 7B model optimized for RTX 3060 Ti")
-            if cpu_mode and large_model:
-                print("🖥️  CPU-only mode with 32B model - this will be very slow!")
-                print("     Consider using the default 7B model for CPU mode")
-            elif cpu_mode:
-                print("🖥️  CPU-only mode enabled")
+            self.model_name = "qwen2.5:7b-instruct"
+            if not quiet_mode:
+                print("🚀 GPU mode enabled - using 7B model optimized for RTX 3060 Ti")
+                if cpu_mode and large_model:
+                    print("🖥️  CPU-only mode with 14B model - this will be slower!")
+                    print("     Consider using the default 7B model for CPU mode")
+                elif cpu_mode:
+                    print("🖥️  CPU-only mode enabled")
         
         # Configure OllamaManager for our specific setup
         self.ollama_manager = OllamaManager()
@@ -89,9 +94,11 @@ class QwenChurnAssistantManager:
         self.qwen_override_file = Path("docker-compose.qwen-churn-override.yml")
         
         if cpu_mode:
-            print(f"🖥️  Using: {self.base_ollama_file} + {self.base_webui_file} + {self.qwen_override_file} (CPU mode)")
+            if not quiet_mode:
+                print(f"🖥️  Using: {self.base_ollama_file} + {self.base_webui_file} + {self.qwen_override_file} (CPU mode)")
         else:
-            print(f"🚀 Using: {self.base_ollama_file} + {self.base_webui_file} + {self.gpu_override_file} + {self.qwen_override_file} (GPU mode)")
+            if not quiet_mode:
+                print(f"🚀 Using: {self.base_ollama_file} + {self.base_webui_file} + {self.gpu_override_file} + {self.qwen_override_file} (GPU mode)")
         
     def wait_for_services(self):
         """Wait for both Ollama and Open WebUI to be ready using managers"""
@@ -313,7 +320,7 @@ class QwenChurnAssistantManager:
         if not self.utility_manager.check_system_requirements(
             model_name=self.config['model_name'],
             model_description=f"{self.model_name} - Churn analysis model",
-            vram_requirement="8GB+ RAM (CPU mode)" if self.cpu_mode else "24GB+ VRAM (GPU mode)"
+            vram_requirement="8GB+ RAM (CPU mode)" if self.cpu_mode else "12GB+ VRAM (GPU mode)"
         ):
             return False
         
@@ -373,14 +380,14 @@ class QwenChurnAssistantManager:
         print(f"🤖 Pulling Qwen model: {self.config['model_name']}")
         print("   This may take several minutes depending on your internet connection...")
         print(f"   Model: {self.model_name} - Churn analysis model")
-        print(f"   Size: {'~3GB' if '7b' in self.config['model_name'] else '~20GB'}")
+        print(f"   Size: {'~3GB' if '7b' in self.config['model_name'] else '~8GB'}")
         
         try:
             self.ollama_manager.pull_models()
             model_pulled = True
         except Exception as e:
             print(f"❌ Error pulling model via OllamaManager: {e}")
-            if '32b' in self.config['model_name'] and self.cpu_mode:
+            if '14b' in self.config['model_name'] and self.cpu_mode:
                 print("\n💡 Suggestion: Try using the default 7B model for CPU mode:")
                 print(f"   python {sys.argv[0]} --cpu")
             model_pulled = False
@@ -480,12 +487,54 @@ class QwenChurnAssistantManager:
     
     def status(self):
         """Check the status of the infrastructure using managers"""
-        mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
-        print(f"📊 Qwen Churn Assistant Status ({mode_info})")
+        # First check if containers exist
+        containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
+        containers_exist = False
+        
+        try:
+            import docker
+            client = docker.from_env()
+            for container_name in containers:
+                try:
+                    container = client.containers.get(container_name)
+                    containers_exist = True
+                    break  # At least one container exists
+                except docker.errors.NotFound:
+                    continue
+        except Exception:
+            pass
+        
+        if containers_exist:
+            # Try to detect the actual running mode from containers
+            detected_mode = self.utility_manager.detect_running_mode("ollama-qwen-churn")
+            
+            if detected_mode != "unknown":
+                # Use detected mode as the primary mode information
+                actual_cpu_mode = (detected_mode == "cpu")
+                mode_info = "CPU-only" if actual_cpu_mode else "GPU-accelerated"
+                mode_note = ""
+                
+                # Only add a note if there's a significant mismatch that might confuse users
+                # Don't show the note for normal operation (when mode detection works)
+                # if actual_cpu_mode != self.cpu_mode:
+                #     configured_mode = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+                #     mode_note = f" (configured as {configured_mode}, but detecting {mode_info})"
+            else:
+                # Fallback to configured mode
+                actual_cpu_mode = self.cpu_mode
+                mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+                mode_note = " (mode detection failed, using configured mode)"
+        else:
+            # No containers exist - infrastructure is not running
+            actual_cpu_mode = self.cpu_mode
+            mode_info = "CPU-only" if self.cpu_mode else "GPU-accelerated"
+            mode_note = " (infrastructure not running)"
+        
+        print(f"📊 Qwen Churn Assistant Status ({mode_info}{mode_note})")
         print("=" * 50)
         print(f"🐳 Base Ollama file: {self.base_ollama_file}")
         print(f"🌐 Base WebUI file: {self.base_webui_file}")
-        if not self.cpu_mode and self.gpu_override_file.exists():
+        if not actual_cpu_mode and self.gpu_override_file.exists():
             print(f"🎮 GPU override file: {self.gpu_override_file}")
         if self.qwen_override_file.exists():
             print(f"🎯 Qwen override file: {self.qwen_override_file}")
@@ -495,23 +544,31 @@ class QwenChurnAssistantManager:
         
         try:
             # Check containers using UtilityManager
-            containers = ["ollama-qwen-churn", "open-webui-qwen-churn"]
             print("🐳 Container Status:")
             self.utility_manager.check_container_status(containers)
             
-            # Check services using managers
-            print()
-            
-            # Check Ollama API using OllamaManager
-            is_running, status_message = self.ollama_manager.get_api_status(11434)
-            print(status_message)
-            
-            # Check WebUI using WebUIManager
-            service_name, url, is_running = self.webui_manager.get_status_info()
-            if is_running:
-                print(f"🌐 {service_name}: ✅ Running at {url}")
+            # Only check services if containers exist
+            if containers_exist:
+                print()
+                
+                # Check Ollama API using OllamaManager
+                is_running, status_message = self.ollama_manager.get_api_status(11434)
+                print(status_message)
+                
+                # Check WebUI using WebUIManager
+                service_name, url, is_running = self.webui_manager.get_status_info()
+                if is_running:
+                    print(f"🌐 {service_name}: ✅ Running at {url}")
+                else:
+                    print(f"🌐 {service_name}: ❌ Not responding at {url}")
             else:
-                print(f"🌐 {service_name}: ❌ Not responding at {url}")
+                print()
+                print("🌐 Ollama API: ❌ Not running (container not found)")
+                print("🌐 open-webui: ❌ Not running (container not found)")
+                print()
+                print("💡 To start the infrastructure:")
+                cpu_flag = " --cpu" if self.cpu_mode else ""
+                print(f"   python start_qwen_churn_assistant.py{cpu_flag}")
                     
         except Exception as e:
             print(f"❌ Error checking status: {e}")
@@ -686,8 +743,8 @@ class QwenChurnAssistantManager:
             import subprocess
             
             # Increase timeout for large models
-            timeout_seconds = 180 if "32b" in expected_custom_model_name else 60
-            print(f"   ⏰ Using {timeout_seconds}s timeout for {'large' if '32b' in expected_custom_model_name else 'standard'} model")
+            timeout_seconds = 120 if "14b" in expected_custom_model_name else 60
+            print(f"   ⏰ Using {timeout_seconds}s timeout for {'large' if '14b' in expected_custom_model_name else 'standard'} model")
             
             # Run the test command with proper encoding handling
             result = subprocess.run([
@@ -739,11 +796,11 @@ class QwenChurnAssistantManager:
                 return False
                 
         except subprocess.TimeoutExpired:
-            model_size = "32B" if "32b" in expected_custom_model_name else "7B"
-            timeout_used = 180 if "32b" in expected_custom_model_name else 60
+            model_size = "14B" if "14b" in expected_custom_model_name else "7B"
+            timeout_used = 120 if "14b" in expected_custom_model_name else 60
             print(f"❌ Test timed out after {timeout_used} seconds")
-            if "32b" in expected_custom_model_name:
-                print("💡 32B model is too large for RTX 3060 Ti (8GB VRAM)")
+            if "14b" in expected_custom_model_name:
+                print("💡 14B model may be tight on RTX 3060 Ti (8GB VRAM)")
                 print("💡 Try using the optimized 7B model instead:")
                 print(f"   python start_qwen_churn_assistant.py --test")
             else:

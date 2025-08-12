@@ -3,10 +3,10 @@
 Qwen Churn Assistant Infrastructure Starter
 
 This script sets up the infrastructure for the Qwen Churn Assistant as described in churn_qwen.md.
-It deploys Qwen2.5-Coder-32B-Instruct via Ollama and Open WebUI for churn analysis conversations.
+It deploys Qwen2.5-Instruct via Ollama and Open WebUI for churn analysis conversations.
 
 Key Features:
-- Deploys Qwen2.5-Coder model via Ollama (7B default, 32B optional)
+- Deploys Qwen2.5-Instruct model via Ollama (7B default, 14B optional)
 - Sets up Open WebUI for natural language churn analysis
 - Configures specialized model with business-focused churn analysis prompt
 - No code execution - purely conversational analysis
@@ -41,7 +41,7 @@ def main():
 Examples:
   python start_qwen_churn_assistant.py              # Start with GPU acceleration (7B model)
   python start_qwen_churn_assistant.py --cpu        # Use CPU-only mode (7B model)
-  python start_qwen_churn_assistant.py --cpu --large-model  # CPU with 32B model (slow)
+  python start_qwen_churn_assistant.py --cpu --large-model  # CPU with 14B model (slower)
   python start_qwen_churn_assistant.py --stop       # Stop the infrastructure
   python start_qwen_churn_assistant.py --status     # Check status
   python start_qwen_churn_assistant.py --logs       # Show container logs
@@ -54,7 +54,7 @@ Notes:
   - First startup may take 3-5 minutes as WebUI downloads dependencies
   - GPU mode uses 7B model optimized for RTX 3060 Ti (8GB VRAM)
   - CPU mode is slower but works on any hardware
-  - Use --large-model for 32B model (requires more resources)
+  - Use --large-model for 14B model (requires more resources)
 
 Architecture:
   Base files: docker-compose.ollama.yml + docker-compose.webui.yml (CPU-optimized)
@@ -66,7 +66,7 @@ Architecture:
     parser.add_argument('--cpu', action='store_true',
                        help='Use CPU-only mode (no GPU acceleration, uses 7B model)')
     parser.add_argument('--large-model', action='store_true',
-                       help='Force use of 32B model even in CPU mode (very slow)')
+                       help='Force use of 14B model even in CPU mode (slower)')
     parser.add_argument('--stop', action='store_true',
                        help='Stop the Qwen Churn Assistant infrastructure')
     parser.add_argument('--status', action='store_true',
@@ -84,8 +84,9 @@ Architecture:
     
     args = parser.parse_args()
     
-    # Create manager instance
-    manager = QwenChurnAssistantManager(cpu_mode=args.cpu, large_model=args.large_model)
+    # Create manager instance with quiet mode for status checks
+    quiet_mode = args.status or args.logs  # Suppress output for status and logs commands
+    manager = QwenChurnAssistantManager(cpu_mode=args.cpu, large_model=args.large_model, quiet_mode=quiet_mode)
     
     if args.stop:
         manager.stop_infrastructure()

@@ -10,7 +10,7 @@ This project provides a **fully local AI infrastructure** with two specialized m
 - 🔍 **Qwen Churn Assistant**: Specialized customer churn analysis
 - 📈 Natural language data analysis (no coding required)
 - 🎯 Business-focused insights and recommendations
-- 🤖 Powered by Qwen2.5-Coder with specialized system prompts
+- 🤖 Powered by Qwen2.5-Instruct with specialized system prompts
 
 ## 🚀 Key Features
 
@@ -54,7 +54,7 @@ This project provides a **fully local AI infrastructure** with two specialized m
 | Primary Model | [`DeepSeek Coder V2 Lite`](https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct) | 15.7B parameter coding specialist model |
 | VSCode Plugin | [`Continue`](https://continue.dev)                       | Inline chat & refactor tools             |
 | **Business Analytics Mode** |                                          |                                          |
-| Analytics Engine | [`Qwen2.5-Coder`](https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct) | 32B/7B parameter business analysis specialist |
+| Analytics Engine | [`Qwen2.5-Instruct`](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct) | 14B/7B parameter business analysis specialist |
 | System Prompts | Template-driven business intelligence prompts            | Specialized for churn analysis and business insights |
 | **Shared Infrastructure** |                                              |                                          |
 | Web Interface | [`Open WebUI`](https://github.com/open-webui/open-webui) | OpenAI-compatible UI & proxy             |
@@ -239,7 +239,7 @@ python start_llama_server.py --cleanup
 ```bash
 # Quick business analytics setup
 python start_qwen_churn_assistant.py --cpu     # CPU mode (7B model)
-python start_qwen_churn_assistant.py           # GPU mode (32B model)
+python start_qwen_churn_assistant.py           # GPU mode (14B model)
 
 # Then visit http://localhost:3000 and upload your CSV files
 ```
@@ -373,9 +373,9 @@ Recent deployment test results:
 - ✅ **Parameters**: 15.7B parameters with enhanced health checks
 - ✅ **Health Monitoring**: Multi-endpoint validation and container health checks
 
-**Business Analytics Mode** (Qwen2.5-Coder):
+**Business Analytics Mode** (Qwen2.5-Instruct):
 - ✅ **CPU Mode**: 7B model at ~15-20 tokens/second
-- ✅ **GPU Mode**: 32B model at ~30-50 tokens/second  
+- ✅ **GPU Mode**: 14B model at ~30-50 tokens/second  
 - ✅ **Memory System**: Persistent conversation memory
 - ✅ **Workspace**: CSV file analysis capabilities
 
@@ -394,7 +394,7 @@ The Qwen Churn Assistant is a specialized business intelligence system that anal
 ### � **Key Features**
 - **🗣️ Natural Language Interface**: Ask business questions in plain English
 - **📈 Zero-Code Analysis**: No Python, SQL, or technical skills required
-- **🤖 Specialized AI**: Qwen2.5-Coder optimized with business intelligence prompts
+- **🤖 Specialized AI**: Qwen2.5-Instruct optimized with business intelligence prompts
 - **🔒 Local & Private**: All analysis happens on your hardware
 - **💡 Actionable Insights**: Get practical recommendations, not just statistics
 - **📝 Memory-Enabled**: Remembers context across analysis sessions
@@ -403,13 +403,13 @@ The Qwen Churn Assistant is a specialized business intelligence system that anal
 
 ### 🚀 **Quick Start**
 ```bash
-# GPU mode (recommended - uses 32B model for comprehensive analysis)
+# GPU mode (recommended - uses 14B model for comprehensive analysis)
 python start_qwen_churn_assistant.py
 
 # CPU mode (uses optimized 7B model - much faster on CPU)
 python start_qwen_churn_assistant.py --cpu
 
-# CPU mode with large model (32B - very slow but most comprehensive)
+# CPU mode with large model (14B - slower but more comprehensive)
 python start_qwen_churn_assistant.py --cpu --large-model
 
 # Management commands
@@ -546,19 +546,19 @@ python start_qwen_churn_assistant.py --cleanup-all
 
 ### 🧪 **Comprehensive Testing Guide**
 
-This testing suite ensures your custom `qwen2.5-coder:7b-churn` model is properly configured with the specialized churn analysis system prompt and behaves according to business-focused constraints.
+This testing suite ensures your custom `qwen2.5:7b-instruct-churn` model is properly configured with the specialized churn analysis system prompt and behaves according to business-focused constraints.
 
 #### **Prerequisites**
 1. **Verify Model Availability**
    ```bash
    docker exec ollama-qwen-churn ollama list
    ```
-   - Confirm `qwen2.5-coder:7b-churn` appears in the list
+   - Confirm `qwen2.5:7b-instruct-churn` appears in the list
    - Note the creation/modification date
 
 2. **Access Web UI**
    - Open http://localhost:3000
-   - Select the `qwen2.5-coder:7b-churn` model from the dropdown
+   - Select the `qwen2.5:7b-instruct-churn` model from the dropdown
    - Ensure you're testing the custom model, not the base model
 
 #### **Test Suite**
@@ -659,7 +659,7 @@ I notice customers with month-to-month contracts have higher churn rates. What s
 
 #### **Comparison Test with Base Model**
 
-To verify your customization is working, also test the base model `qwen2.5-coder:7b`:
+To verify your customization is working, also test the base model `qwen2.5:7b-instruct`:
 
 *Test Prompt:*
 ```
@@ -691,7 +691,7 @@ I have customer churn data and need help analyzing it. What's the best approach?
 
 ```
 Date: ___________
-Model: qwen2.5-coder:7b-churn
+Model: qwen2.5:7b-instruct-churn
 
 Test 1 - System Prompt Integration: ✅/❌
 Test 2 - Code Generation Constraint: ✅/❌  
@@ -710,7 +710,7 @@ _________________________________
 #### **Troubleshooting Test Failures**
 
 If tests fail, check:
-1. **Model Selection**: Ensure you're using `qwen2.5-coder:7b-churn`, not the base model
+1. **Model Selection**: Ensure you're using `qwen2.5:7b-instruct-churn`, not the base model
 2. **Model Creation**: Verify the custom model was created successfully
 3. **Modelfile Content**: Check that the system prompt was properly integrated
 4. **Container Status**: Ensure Ollama container is running and responsive
@@ -749,7 +749,7 @@ This **template-driven AI infrastructure platform** builds on the work of:
 
 **AI Models:**
 - [DeepSeek](https://huggingface.co/deepseek-ai) - DeepSeek Coder V2 Lite (Development Mode)
-- [Qwen Team](https://huggingface.co/Qwen) - Qwen2.5-Coder (Business Analytics Mode)
+- [Qwen Team](https://huggingface.co/Qwen) - Qwen2.5-Instruct (Business Analytics Mode)
 
 **Development Tools:**
 - [Continue](https://continue.dev) - VS Code AI assistant extension
