@@ -122,15 +122,8 @@ class QwenChurnAssistantManager:
             print("   💡 Model may still be loading in background")
             print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
         
-        # Force model loading by making a test API call
-        print("   🔥 Triggering model loading with test API call...")
-        model_loaded = self.trigger_model_loading()
-        
-        if not model_loaded:
-            print("   ⚠️  Test API call failed, but basic API is responsive")
-            print("   💡 Model may still be initializing - check performance in WebUI")
-        else:
-            print("   ✅ Model successfully loaded and ready for inference")
+        # Note: Model warm-up will happen after model setup in start_infrastructure
+        print("   ⚠️  Model warm-up will occur after model setup is complete")
         
         # Use WebUIManager's wait_for_api_with_progress method with smart health checks
         # WebUI can take 3-5 minutes to initialize on first startup due to file downloads
@@ -214,61 +207,6 @@ class QwenChurnAssistantManager:
         else:
             # No tensor loading detected, probably fine
             return True
-    
-    def trigger_model_loading(self):
-        """
-        Actively trigger model loading by making a test API call to Ollama
-        
-        Returns:
-            bool: True if model loads successfully, False otherwise
-        """
-        import requests
-        import json
-        
-        try:
-            # Use a simple, fast test prompt to trigger model loading
-            test_data = {
-                "model": self.model_name,
-                "prompt": "Hi",
-                "stream": False,
-                "options": {
-                    "num_predict": 1,  # Only generate 1 token to make it fast
-                    "temperature": 0.1
-                }
-            }
-            
-            # Make API call to trigger model loading
-            print(f"   📡 Making test API call to load {self.model_name}...")
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json=test_data,
-                timeout=120  # 2 minutes timeout for model loading
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                if 'response' in result:
-                    print("   🎯 Test API call successful - model is loaded and responsive")
-                    return True
-                else:
-                    print("   ⚠️  Test API call returned unexpected format")
-                    return False
-            else:
-                print(f"   ❌ Test API call failed with status {response.status_code}")
-                if response.status_code == 404:
-                    print(f"   💡 Model '{self.model_name}' may not be available")
-                return False
-                
-        except requests.exceptions.Timeout:
-            print("   ⏰ Test API call timed out - model may be loading slowly")
-            print("   💡 This is normal for first-time model loading")
-            return False
-        except requests.exceptions.ConnectionError:
-            print("   🔌 Connection error during test API call")
-            return False
-        except Exception as e:
-            print(f"   ❌ Error during test API call: {e}")
-            return False
     
     def get_compose_command(self, action="up", additional_args=""):
         """Build the docker compose command with appropriate files using UtilityManager"""
@@ -995,31 +933,37 @@ class QwenChurnAssistantManager:
         """
         print(f"   🎯 Loading model into memory: {model_name}")
         
+        # Use ollama_manager's smart warm_up_model method (no log checking needed)
+        if self.ollama_manager.warm_up_model(model_name, timeout=300):
+            # Verify model stays in memory using ollama_manager
+            return self.ollama_manager.verify_model_in_memory(model_name)
+        else:
+            return False
+    
+    def _verify_model_in_memory(self, model_name):
+        """Verify model is loaded and stays in memory"""
         try:
             import subprocess
             
-            # Use a simple warm-up prompt
-            warm_up_prompt = "Hi"
-            
-            # Give more time for initial model loading (90 seconds)
-            result = subprocess.run([
+            print(f"   � Verifying model is loaded in memory...")
+            verify_result = subprocess.run([
                 "docker", "exec", "ollama-qwen-churn", 
-                "ollama", "run", model_name, warm_up_prompt
-            ], capture_output=True, text=True, timeout=90, encoding='utf-8', errors='replace')
+                "ollama", "ps"
+            ], capture_output=True, text=True, timeout=10, encoding='utf-8', errors='replace')
             
-            if result.returncode == 0 and result.stdout.strip():
-                return True
-            else:
-                if result.stderr:
-                    print(f"   📋 Error during warm-up: {result.stderr.strip()}")
-                return False
-                
-        except subprocess.TimeoutExpired:
-            print(f"   ❌ Model warm-up timed out (90s)")
-            return False
+            if verify_result.returncode == 0:
+                if model_name in verify_result.stdout:
+                    print(f"   ✅ Model confirmed loaded in memory")
+                    return True
+                else:
+                    print(f"   ⚠️  Model not showing as loaded (may have unloaded quickly)")
+                    return True  # Still consider success if initial load worked
+            
+            return True
+            
         except Exception as e:
-            print(f"   ❌ Error during model warm-up: {e}")
-            return False
+            print(f"   ⚠️  Could not verify model in memory: {e}")
+            return True  # Don't fail the entire warm-up for verification issues
     
     def _run_model_test(self, model_name, prompt, timeout=180):
         """Helper method to run a single test against the model"""

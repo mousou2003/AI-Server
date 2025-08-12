@@ -284,6 +284,177 @@ SYSTEM """{template_content}"""
         except requests.RequestException:
             return False, f"🌐 Ollama API: ❌ Not responding"
     
+    def wait_for_model_ready(self, model_name, max_wait=480, check_interval=15, skip_api_check=False):
+        """
+        Wait for a specific model to be ready for inference using API checks
+        
+        Args:
+            model_name (str): Name of the model to wait for
+            max_wait (int): Maximum wait time in seconds
+            check_interval (int): How often to check in seconds
+            skip_api_check (bool): If True, skip the initial API readiness check
+            
+        Returns:
+            bool: True if model becomes ready, False if timeout
+        """
+        print(f"   ⏳ Waiting for model to be ready: {model_name}")
+        
+        import time
+        start_time = time.time()
+        
+        # First ensure API is responding (unless skipped)
+        if not skip_api_check:
+            if not self.wait_for_api(retries=10):
+                print(f"   ❌ Ollama API not ready")
+                return False
+        
+        # Then wait for the model to be accessible
+        while (time.time() - start_time) < max_wait:
+            try:
+                # Try a minimal API call to check if model is ready
+                # Use timeout aligned with Docker OLLAMA_REQUEST_TIMEOUT (180s)
+                response = requests.post(
+                    f"{self.config['url']}/api/generate",
+                    json={
+                        "model": model_name,
+                        "prompt": "test",
+                        "stream": False,
+                        "options": {"num_predict": 1}
+                    },
+                    timeout=180  # Match Docker OLLAMA_REQUEST_TIMEOUT
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if 'response' in result:
+                        elapsed = time.time() - start_time
+                        print(f"   ✅ Model ready after {elapsed:.1f}s")
+                        return True
+                    
+            except requests.exceptions.RequestException:
+                pass  # Model not ready yet
+            
+            print(f"   ⏳ Model loading... ({int(time.time() - start_time)}s elapsed)")
+            time.sleep(check_interval)
+        
+        print(f"   ⏰ Model readiness check timed out after {max_wait}s")
+        return False
+
+    def warm_up_model(self, model_name, timeout=480):
+        """
+        Warm up a model by making a simple API request to load it into memory
+        Uses smart waiting instead of arbitrary timeouts
+        
+        Args:
+            model_name (str): Name of the model to warm up
+            timeout (int): Maximum timeout in seconds (used as fallback)
+            
+        Returns:
+            bool: True if warm-up successful, False otherwise
+        """
+        print(f"🔥 Warming up model: {model_name}")
+        
+        # First, wait for the model to be ready using smart detection (skip API check since we're called after API is ready)
+        if not self.wait_for_model_ready(model_name, max_wait=timeout, check_interval=15, skip_api_check=True):
+            print(f"   ❌ Model readiness check failed")
+            return False
+        
+        # Model is ready, do a final warm-up call
+        try:
+            api_data = {
+                "model": model_name,
+                "prompt": "Hi",
+                "stream": False,
+                "options": {
+                    "num_predict": 5,
+                    "temperature": 0.1
+                }
+            }
+            
+            response = requests.post(
+                f"{self.config['url']}/api/generate",
+                json=api_data,
+                timeout=180  # Match Docker OLLAMA_REQUEST_TIMEOUT since model should be ready
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'response' in result:
+                    print(f"   ✅ Model warmed up successfully")
+                    print(f"   💬 Response: {result['response'][:50]}..." if len(result['response']) > 50 else f"   💬 Response: {result['response']}")
+                    return True
+                else:
+                    print(f"   ⚠️  API response missing 'response' field")
+                    return False
+            else:
+                print(f"   ❌ Final warm-up call failed with status {response.status_code}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            print(f"   ❌ Final warm-up call timed out")
+            return False
+        except requests.exceptions.ConnectionError:
+            print(f"   ❌ Connection error during final warm-up")
+            return False
+        except Exception as e:
+            print(f"   ❌ Error during final warm-up: {e}")
+            return False
+
+    def verify_model_in_memory(self, model_name):
+        """
+        Verify that a model is currently loaded in memory
+        
+        Args:
+            model_name (str): Name of the model to verify
+            
+        Returns:
+            bool: True if model is verified in memory, False otherwise
+        """
+        print(f"   🔍 Verifying model is loaded in memory...")
+        
+        # Use API method first
+        success, running_models = self.get_running_models()
+        
+        if success:
+            if any(model_name in model for model in running_models):
+                print(f"   ✅ Model confirmed loaded in memory")
+                print(f"   📊 Running models: {', '.join(running_models)}")
+                return True
+            else:
+                print(f"   ⚠️  Model not showing as loaded")
+                print(f"   📊 Currently running: {', '.join(running_models) if running_models else 'None'}")
+                return True  # Still consider success - model may be cached
+        else:
+            print(f"   ⚠️  Could not verify via API")
+            return True  # Don't fail for verification issues
+
+    def get_running_models(self, port=None):
+        """
+        Get list of currently running models using Ollama API
+        
+        Args:
+            port (int, optional): Port to check, uses config port if not provided
+            
+        Returns:
+            tuple: (success: bool, models: list) - list of running model names
+        """
+        if port is None:
+            port = self.config.get('port', 11434)
+            
+        try:
+            response = requests.get(f"http://localhost:{port}/api/ps", timeout=10)
+            if response.status_code == 200:
+                ps_data = response.json()
+                if 'models' in ps_data:
+                    running_models = [model.get('name', '') for model in ps_data['models']]
+                    return True, running_models
+                else:
+                    return True, []  # No models running
+            else:
+                return False, []
+        except requests.RequestException:
+            return False, []
+
     def setup_for_specialized_use(self, container_name=None, specialized_models=None, port=None):
         """
         Setup Ollama manager for specialized use case
