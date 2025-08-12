@@ -114,20 +114,18 @@ class QwenChurnAssistantManager:
             return False
         
         # Additional check: Wait for tensor loading to complete
-        print("   🧠 Checking for model tensor loading completion...")
+        print("   🧠 Checking for tensor loading...")
         tensor_loading_complete = self.wait_for_tensor_loading()
         
         if not tensor_loading_complete:
             print("   ⚠️  Tensor loading check failed, but API is responsive")
-            print("   💡 Model may still be loading in background")
-            print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
         
         # Note: Model warm-up will happen after model setup in start_infrastructure
-        print("   ⚠️  Model warm-up will occur after model setup is complete")
+        print("   ℹ️  Model warm-up will occur after model setup")
         
         # Use WebUIManager's wait_for_api_with_progress method with smart health checks
         # WebUI can take 3-5 minutes to initialize on first startup due to file downloads
-        print("   📱 WebUI initialization can take 3-5 minutes on first startup...")
+        print("   📱 Waiting for WebUI (can take 3-5 minutes on first startup)...")
         webui_ready = self.webui_manager.wait_for_api_with_progress(retries=240, progress_interval=15)
         
         if not webui_ready:
@@ -142,7 +140,7 @@ class QwenChurnAssistantManager:
         Returns:
             bool: True if tensor loading completes or is not detected, False if timeout
         """
-        print("   🔍 Monitoring tensor loading progress...")
+        print("   🔍 Monitoring for tensor loading...", end="", flush=True)
         
         import time
         max_wait_time = 300  # 5 minutes max wait for tensor loading
@@ -160,7 +158,7 @@ class QwenChurnAssistantManager:
                     # Check for tensor loading messages
                     if "loading model tensors" in stdout.lower():
                         if not tensor_loading_detected:
-                            print("   📊 Tensor loading detected, waiting for completion...")
+                            print("   📊 Tensor loading detected...")
                             tensor_loading_detected = True
                     
                     # Check for completion indicators
@@ -173,6 +171,7 @@ class QwenChurnAssistantManager:
                     
                     if any(indicator in stdout.lower() for indicator in completion_indicators):
                         if tensor_loading_detected:
+                            print()  # New line after progress
                             print("   ✅ Tensor loading completed successfully")
                         return True
                     
@@ -189,9 +188,15 @@ class QwenChurnAssistantManager:
                         return False
                 
                 # If no tensor loading detected within first 30 seconds, assume not needed
-                if not tensor_loading_detected and (time.time() - start_time) > 30:
+                elapsed = int(time.time() - start_time)
+                if not tensor_loading_detected and elapsed > 30:
+                    print()  # New line after monitoring message
                     print("   ℹ️  No tensor loading detected - model may already be cached")
                     return True
+                
+                # Update progress on same line if tensor loading detected
+                if tensor_loading_detected:
+                    print(f"\r   📊 Tensor loading in progress... ({elapsed}s elapsed)", end="", flush=True)
                 
                 time.sleep(check_interval)
                 
@@ -201,6 +206,7 @@ class QwenChurnAssistantManager:
                 return True
         
         if tensor_loading_detected:
+            print()  # New line after progress
             print(f"   ⚠️  Tensor loading timeout after {max_wait_time} seconds")
             print("   💡 Model may still be loading - check performance in WebUI")
             return False
@@ -436,8 +442,9 @@ class QwenChurnAssistantManager:
             self.config["custom_model_name"] = custom_model_name
         
         # Warm up the model to ensure it's loaded and ready for immediate use
-        print("\n🔥 Warming up model for immediate responsiveness...")
         model_to_warm = custom_model_name if prompt_configured else self.config["model_name"]
+        cpu_timing = " (may take 3-5 minutes in CPU mode)" if self.cpu_mode else ""
+        print(f"\n🔥 Warming up model: {model_to_warm}{cpu_timing}")
         warm_up_success = self._warm_up_model(model_to_warm)
         
         if warm_up_success:
@@ -931,10 +938,10 @@ class QwenChurnAssistantManager:
         Returns:
             bool: True if warm-up successful, False otherwise
         """
-        print(f"   🎯 Loading model into memory: {model_name}")
-        
         # Use ollama_manager's smart warm_up_model method (no log checking needed)
-        if self.ollama_manager.warm_up_model(model_name, timeout=300):
+        # Use longer timeout for CPU mode since model loading can take 4-5 minutes
+        timeout = 600 if self.cpu_mode else 300  # 10 minutes for CPU, 5 minutes for GPU
+        if self.ollama_manager.warm_up_model(model_name, timeout=timeout):
             # Verify model stays in memory using ollama_manager
             return self.ollama_manager.verify_model_in_memory(model_name)
         else:

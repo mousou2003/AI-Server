@@ -284,7 +284,7 @@ SYSTEM """{template_content}"""
         except requests.RequestException:
             return False, f"🌐 Ollama API: ❌ Not responding"
     
-    def wait_for_model_ready(self, model_name, max_wait=480, check_interval=15, skip_api_check=False):
+    def wait_for_model_ready(self, model_name, max_wait=600, check_interval=15, skip_api_check=False):
         """
         Wait for a specific model to be ready for inference using API checks
         
@@ -321,7 +321,7 @@ SYSTEM """{template_content}"""
                         "stream": False,
                         "options": {"num_predict": 1}
                     },
-                    timeout=180  # Match Docker OLLAMA_REQUEST_TIMEOUT
+                    timeout=300  # 5 minutes for first-time model loading in CPU mode
                 )
                 
                 if response.status_code == 200:
@@ -334,13 +334,16 @@ SYSTEM """{template_content}"""
             except requests.exceptions.RequestException:
                 pass  # Model not ready yet
             
-            print(f"   ⏳ Model loading... ({int(time.time() - start_time)}s elapsed)")
+            # Update progress on the same line
+            elapsed = int(time.time() - start_time)
+            print(f"\r   ⏳ Model loading... ({elapsed}s elapsed)", end="", flush=True)
             time.sleep(check_interval)
         
+        print()  # New line after progress
         print(f"   ⏰ Model readiness check timed out after {max_wait}s")
         return False
 
-    def warm_up_model(self, model_name, timeout=480):
+    def warm_up_model(self, model_name, timeout=600):
         """
         Warm up a model by making a simple API request to load it into memory
         Uses smart waiting instead of arbitrary timeouts
@@ -374,7 +377,7 @@ SYSTEM """{template_content}"""
             response = requests.post(
                 f"{self.config['url']}/api/generate",
                 json=api_data,
-                timeout=180  # Match Docker OLLAMA_REQUEST_TIMEOUT since model should be ready
+                timeout=300  # 5 minutes for first-time model loading in CPU mode
             )
             
             if response.status_code == 200:
