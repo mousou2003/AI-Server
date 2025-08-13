@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-
+import json
 
 class Tools:
     def _resolve_uploaded_file_path(self, file_name: str) -> str:
@@ -16,7 +16,7 @@ class Tools:
                     return os.path.join(root, f)
         return None
 
-    def load_dataset_storage(
+    def load_dataset(
         self, question: str, sample_size: int = None, file_name: str = "dataset.csv"
     ):
         """
@@ -42,8 +42,9 @@ class Tools:
                 else pd.read_csv(found_path, nrows=sample_size)
             )
             sample = df.to_dict(orient="records")
-
-            return {"question": question, "data": sample}
+            result = json.dumps({"question": question, "data": sample})
+            print(f"✅ Successfully collected dataset '{file_name}' with {len(sample)} records.")
+            return result
 
         except Exception as e:
             return f"❌ Could not analyze file `{file_name}`: {e}"
