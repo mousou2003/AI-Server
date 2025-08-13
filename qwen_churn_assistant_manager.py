@@ -113,13 +113,6 @@ class QwenChurnAssistantManager:
             print("   💡 Try checking container logs: docker logs ollama-qwen-churn")
             return False
         
-        # Additional check: Wait for tensor loading to complete
-        print("   🧠 Checking for tensor loading...")
-        tensor_loading_complete = self.wait_for_tensor_loading()
-        
-        if not tensor_loading_complete:
-            print("   ⚠️  Tensor loading check failed, but API is responsive")
-        
         # Note: Model warm-up will happen after model setup in start_infrastructure
         print("   ℹ️  Model warm-up will occur after model setup")
         
@@ -133,86 +126,6 @@ class QwenChurnAssistantManager:
             
         return True
     
-    def wait_for_tensor_loading(self):
-        """
-        Wait for tensor loading to complete by monitoring container logs
-        
-        Returns:
-            bool: True if tensor loading completes or is not detected, False if timeout
-        """
-        print("   🔍 Monitoring for tensor loading...", end="", flush=True)
-        
-        import time
-        max_wait_time = 300  # 5 minutes max wait for tensor loading
-        check_interval = 5   # Check every 5 seconds
-        start_time = time.time()
-        
-        tensor_loading_detected = False
-        
-        while (time.time() - start_time) < max_wait_time:
-            try:
-                # Get recent container logs
-                stdout, stderr = self.utility_manager.get_container_logs("ollama-qwen-churn", lines=50)
-                
-                if stdout:
-                    # Check for tensor loading messages
-                    if "loading model tensors" in stdout.lower():
-                        if not tensor_loading_detected:
-                            print("   📊 Tensor loading detected...")
-                            tensor_loading_detected = True
-                    
-                    # Check for completion indicators
-                    completion_indicators = [
-                        "load_tensors: model tensors loaded",
-                        "model loaded successfully",
-                        "llama runner started",
-                        "server listening"
-                    ]
-                    
-                    if any(indicator in stdout.lower() for indicator in completion_indicators):
-                        if tensor_loading_detected:
-                            print()  # New line after progress
-                            print("   ✅ Tensor loading completed successfully")
-                        return True
-                    
-                    # Check for error conditions
-                    error_indicators = [
-                        "failed to load",
-                        "out of memory",
-                        "cuda error",
-                        "tensor loading failed"
-                    ]
-                    
-                    if any(error in stdout.lower() for error in error_indicators):
-                        print(f"   ❌ Error detected during tensor loading")
-                        return False
-                
-                # If no tensor loading detected within first 30 seconds, assume not needed
-                elapsed = int(time.time() - start_time)
-                if not tensor_loading_detected and elapsed > 30:
-                    print()  # New line after monitoring message
-                    print("   ℹ️  No tensor loading detected - model may already be cached")
-                    return True
-                
-                # Update progress on same line if tensor loading detected
-                if tensor_loading_detected:
-                    print(f"\r   📊 Tensor loading in progress... ({elapsed}s elapsed)", end="", flush=True)
-                
-                time.sleep(check_interval)
-                
-            except Exception as e:
-                print(f"   ⚠️  Error monitoring tensor loading: {e}")
-                # Don't fail the entire startup for monitoring issues
-                return True
-        
-        if tensor_loading_detected:
-            print()  # New line after progress
-            print(f"   ⚠️  Tensor loading timeout after {max_wait_time} seconds")
-            print("   💡 Model may still be loading - check performance in WebUI")
-            return False
-        else:
-            # No tensor loading detected, probably fine
-            return True
     
     def get_compose_command(self, action="up", additional_args=""):
         """Build the docker compose command with appropriate files using UtilityManager"""
