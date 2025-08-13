@@ -13,9 +13,3 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama-qwen-churn:11434
       - WEBUI_NAME=Qwen Churn Assistant
-    volumes:
-      - qwen-churn-webui:/app/backend/data
-
-volumes:
-  qwen-churn-webui:
-    name: qwen-churn-assistant-data

@@ -24,7 +24,7 @@ services:
       - WEBUI_MAX_FILE_SIZE=20m        # 20MB limit (covers 16MB + overhead)
       - OLLAMA_REQUEST_TIMEOUT=120     # Match WebUI timeout
     volumes:
-      - open-webui:/app/backend/data
+      - ./.webui:/app/backend/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "curl", "-f", "http://localhost:8080/", "||", "exit", "1"]
@@ -40,9 +40,6 @@ services:
           memory: ${WEBUI_MEM_RESERVATION:-1g}  # Minimal reservation
     networks:
       - ai_network
-
-volumes:
-  open-webui:
 
 networks:
   ai_network:
