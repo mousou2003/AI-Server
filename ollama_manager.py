@@ -24,7 +24,7 @@ class OllamaManager:
             "qwen2.5:7b-instruct",   # Qwen2.5-Instruct 7B - General instruction following model that fits 8GB VRAM
             "qwen2.5:14b-instruct",  # Qwen2.5-Instruct 14B - Larger model for better performance (may be tight on 8GB VRAM)
             "gemma2:9b",             # Gemma2 9B - Alternative model, might work on 8GB but could be tight
-            "qwen-vl",               # Qwen-VL - Vision Language model for OCR and image tasks
+            "qwen2.5vl",               # Qwen-VL - Vision Language model for OCR and image tasks
         ]
 
         # Load from .env or environment
