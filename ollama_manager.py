@@ -9,16 +9,45 @@ from utility_manager import UtilityManager
 
 class OllamaManager:
     def __init__(self):
-        # Ollama configuration - Optimized for RTX 3060 Ti (8GB VRAM)
+        import os
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass  # dotenv is optional, fallback to os.environ
+
+        # Defaults
+        default_name = "ollama"
+        default_port = 11434
+        default_url = f"http://localhost:{default_port}"
+        default_models = [
+            "qwen2.5:7b-instruct",   # Qwen2.5-Instruct 7B - General instruction following model that fits 8GB VRAM
+            "qwen2.5:14b-instruct",  # Qwen2.5-Instruct 14B - Larger model for better performance (may be tight on 8GB VRAM)
+            "gemma2:9b",             # Gemma2 9B - Alternative model, might work on 8GB but could be tight
+            "qwen-vl",               # Qwen-VL - Vision Language model for OCR and image tasks
+        ]
+
+        # Load from .env or environment
+        name = os.getenv("OLLAMA_NAME", default_name)
+        port = int(os.getenv("OLLAMA_PORT", default_port))
+        url = os.getenv("OLLAMA_HOST", default_url)
+
+        # Support MODEL_NAME as first model if present
+        model_name_env = os.getenv("MODEL_NAME")
+        models_env = os.getenv("OLLAMA_MODELS")
+        models = []
+        if model_name_env:
+            models.append(model_name_env)
+        if models_env:
+            models += [m.strip() for m in models_env.split(",") if m.strip()]
+        if not models:
+            models = default_models
+
         self.config = {
-            "name": "ollama",
-            "port": 11434,
-            "url": "http://localhost:11434",
-            "models": [
-                "qwen2.5:7b-instruct",   # Qwen2.5-Instruct 7B - General instruction following model that fits 8GB VRAM
-                "qwen2.5:14b-instruct",  # Qwen2.5-Instruct 14B - Larger model for better performance (may be tight on 8GB VRAM)
-                "gemma2:9b",             # Gemma2 9B - Alternative model, might work on 8GB but could be tight
-            ]
+            "name": name,
+            "port": port,
+            "url": url,
+            "models": models
         }
         
     def wait_for_api(self, retries=30):
@@ -55,7 +84,6 @@ class OllamaManager:
             try:
                 cmd = f'docker exec {self.config["name"]} ollama pull {model}'
                 result = UtilityManager.run_subprocess(cmd, check=False, timeout=300)
-                
                 if result.returncode == 0:
                     print(f"✅ {model} successfully pulled")
                 else:
@@ -64,8 +92,11 @@ class OllamaManager:
                     if model.split(':')[0] in check_result.stdout:
                         print(f"✅ {model} already exists")
                     else:
-                        print(f"⚠️ {model} pull failed (exit code: {result.returncode})")
-                        
+                        print(f"⚠️ {model} pull failed!")
+                        print(f"   Command: {cmd}")
+                        print(f"   Exit code: {result.returncode}")
+                        print(f"   Stderr: {getattr(result, 'stderr', '')}")
+                        print(f"   Stdout: {getattr(result, 'stdout', '')}")
             except subprocess.TimeoutExpired:
                 print(f"⏰ {model} pull timed out (300s)")
             except Exception as e:
