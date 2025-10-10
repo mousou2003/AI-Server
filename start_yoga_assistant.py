@@ -26,6 +26,8 @@ def main():
                        help="Stop the infrastructure instead of starting")
     parser.add_argument("--status", action="store_true", 
                        help="Check status of the infrastructure")
+    parser.add_argument("--open", action="store_true", 
+                       help="Open WebUI in default browser")
     parser.add_argument("--remove-volumes", action="store_true", 
                        help="Remove Docker volumes when stopping (complete cleanup)")
     
@@ -45,6 +47,8 @@ def main():
             yoga_assistant.stop_infrastructure(remove_volumes=args.remove_volumes)
         elif args.status:
             yoga_assistant.status()
+        elif args.open:
+            yoga_assistant.webui_manager.open_in_browser()
         else:
             print("🧘 Starting Yoga Sequence Assistant...")
             print("This assistant specializes in creating personalized yoga class sequences")

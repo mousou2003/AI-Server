@@ -69,8 +69,11 @@ This project provides a **fully local AI infrastructure** with two specialized m
 This repository uses a **template-driven architecture** for maintainable, modular configuration:
 
 ### 🚀 **Entry Points**
+- **`start_webui.py`**: Standalone Ollama + WebUI (generic AI chat, no specialized prompts)
+- **`start_yoga_assistant.py`**: Yoga sequence generation assistant (fitness class planning)
+- **`start_qwen_churn_assistant.py`**: Business analytics assistant (churn analysis, natural language)
 - **`start_llama_server.py`**: llama.cpp server mode (CUDA-enabled, standalone inference engine)
-- **`start_qwen_churn_assistant.py`**: Business analytics mode (churn analysis, natural language)
+- **`start_custom_assistant.py`**: Generic launcher for any template-based assistant
 
 ### ⚙️ **Core Management Modules**
 - **`utility_manager.py`**: Centralized subprocess operations and error handling
