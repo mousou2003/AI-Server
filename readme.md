@@ -77,7 +77,7 @@ This repository uses a **template-driven architecture** for maintainable, modula
 - **`llama_server_manager.py`**: llama.cpp server operations, model management, and enhanced health checks
 - **`ollama_manager.py`**: Ollama service management and model pulling
 - **`webui_manager.py`**: Open WebUI health checking and management
-- **`qwen_churn_assistant_manager.py`**: Specialized business analytics infrastructure management
+- **`ollama_custom_model.py`**: Generalized framework for specialized AI assistants
 - **`network_manager.py`**: Network utilities and Docker Compose management
 
 ### 🏗️ **Modular Architecture Benefits**
@@ -111,7 +111,7 @@ templates/
 - **`docker-compose.llama.yml`**: Base Llama.cpp server
 - **`docker-compose.gpu-override.yml`**: GPU acceleration overlay (Ollama + WebUI)
 - **`docker-compose.llama-gpu-override.yml`**: GPU acceleration for llama.cpp server
-- **`docker-compose.qwen-churn-override.yml`**: Qwen Churn Assistant specialization
+- **`docker-compose.churn-assistant-override.yml`**: Auto-generated Qwen Churn Assistant configuration (created by OllamaCustomModel)
 - **`.gitignore`**: Excludes models, runtime files, preserves templates
 
 ---

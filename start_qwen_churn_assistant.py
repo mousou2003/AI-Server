@@ -2,10 +2,12 @@
 """
 Qwen Churn Assistant Infrastructure Starter
 
-This script sets up the infrastructure for the Qwen Churn Assistant as described in churn_qwen.md.
-It deploys Qwen2.5-Instruct via Ollama and Open WebUI for churn analysis conversations.
+This script sets up the infrastructure for the Qwen Churn Assistant using the generalized
+OllamaCustomModel framework. It deploys Qwen2.5-Instruct via Ollama and Open WebUI for 
+churn analysis conversations.
 
 Key Features:
+- Uses the generalized OllamaCustomModel framework with churn analysis template
 - Deploys Qwen2.5-Instruct model via Ollama (7B default, 14B optional)
 - Sets up Open WebUI for natural language churn analysis
 - Configures specialized model with business-focused churn analysis prompt
@@ -29,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 # Import managers
-from qwen_churn_assistant_manager import QwenChurnAssistantManager
+from ollama_custom_model import OllamaCustomModel
 
 
 def main():
@@ -60,7 +62,7 @@ Notes:
 Architecture:
   Base files: docker-compose.ollama.yml + docker-compose.webui.yml (CPU-optimized)
   GPU mode: + docker-compose.gpu-override.yml (adds GPU acceleration)
-  Qwen churn: + docker-compose.qwen-churn-override.yml (adds churn-specific config)
+  Churn assistant: + docker-compose.churn-assistant-override.yml (auto-generated project config)
         """
     )
     
@@ -91,7 +93,7 @@ Architecture:
     
     # Create manager instance with quiet mode for status checks
     quiet_mode = args.status or args.logs  # Suppress output for status and logs commands
-    manager = QwenChurnAssistantManager(cpu_mode=args.cpu, large_model=args.large_model, quiet_mode=quiet_mode)
+    manager = OllamaCustomModel.create_churn_assistant(cpu_mode=args.cpu, large_model=args.large_model, quiet_mode=quiet_mode)
     
     if args.stop:
         manager.stop_infrastructure()
