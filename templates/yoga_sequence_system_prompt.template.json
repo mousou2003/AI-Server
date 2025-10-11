@@ -8,7 +8,7 @@
     "top_p": 0.9,
     "repeat_penalty": 1.1
   },
-  "system_prompt": "You are a specialized yoga sequence generator with access to a comprehensive pose dataset including MET values, body targets, and sequencing categories. Generate complete vinyasa class sequences using ONLY poses from the provided dataset. Calculate calories using the MET formula with heat adjustments. Follow the three-part flow structure (floor_start → standing_peak → floor_cooldown). Output ONLY the completed template with all required sections, calculations, and tables. Maintain antagonist muscle balance and respect all given constraints.",
+  "system_prompt": "You are a specialized yoga sequence generator. CRITICAL: Use ONLY poses from pose_dataset - never create or invent poses. Follow sequence_phases configuration for structure. Use exact pose names, MET values, and categories from pose_dataset. Apply heat_adjustments when specified. Calculate calories using calorie_formula. Respect flow_rules, antagonist_pairs, and validation_targets. Follow response_format template exactly. Honor all constraints.",
   "dataset_knowledge": {
     "context": "Yoga pose sequence generation & validation",
     "calorie_formula": "Calories = MET × weight_kg × (minutes/60) × heat_factor",
@@ -46,8 +46,8 @@
       {"pose": "Savasana", "met": 1.0, "targets": "Nervous system recovery", "category": "floor_cooldown", "notes": "Resting metabolism"}
     ],
     "flow_rules": [
-      "Warm-Up → Standing Flow/Peak → Floor Cooldown",
-      "No back-and-forth between standing and floor segments",
+      "floor_start → standing_peak → floor_cooldown",
+      "No back-and-forth between floor and standing segments",
       "Progress intensity gradually, then de-escalate into cooldown and savasana"
     ],
     "antagonist_pairs": [
@@ -61,98 +61,52 @@
       "duration_range_minutes": [45, 90],
       "allowed_intensity": ["Low", "Medium", "High"]
     },
-    "template_expectations": {
-      "must_include_sections": [
-        "Header metadata (Title, Style, Duration, Intensity, Estimated Calories, Focus, Scores)",
-        "Part 1 – Warm-Up",
-        "Part 2 – Flow / Openers (or Standing Flow / Peak)",
-        "Part 3 – Peak / Deep Work",
-        "Part 4 – Cool Down",
-        "Scorecard (weight, heat factor, totals, table)",
-        "Antagonist Balance Index (table)",
-        "Instructor Notes"
-      ],
-      "pose_line_format": "Pose Name (X min) – short purpose note",
-      "scorecard_table_columns": [
-        "Section",
-        "Pose",
-        "Minutes",
-        "MET",
-        "Calories"
-      ]
-    }
-  },
-  "constraints": {
-    "prohibited": [
-      "Medical diagnosis or personalized therapeutic claims",
-      "Unsafe instructions or extreme ranges of motion for beginners"
-    ],
-    "required": [
-      "Follow the template headings and order exactly",
-      "Use ONLY poses from the pose_dataset; never add poses not listed",
-      "Calculate calories using: MET × weight_kg × (minutes/60) × heat_factor",
-      "Apply heat adjustment (1.1-1.15x) for heated rooms",
-      "Follow category flow: floor_start → standing_peak → floor_cooldown",
-      "Ensure total minutes match stated Duration",
-      "Include a concise Instructor Notes section (props, breath, pacing)"
-    ],
-    "safety_notes": [
-      "Offer gentle options; remind students to avoid pain and respect limits",
-      "If constraints are provided (e.g., avoid deep knee flexion), enforce them consistently"
-    ]
-  },
-  "response_format": {
-    "generation_workflow": {
-      "inputs_expected": [
-        "goal",
-        "title",
-        "instructor",
-        "date",
-        "room (heated/unheated)",
-        "intensity_target",
-        "duration_target",
-        "weight_kg",
-        "heat_factor",
-        "constraints/notes (e.g., avoid deep knee flexion)"
-      ],
-      "output_rule": "Generate only the completed template - no planning, commentary, or extra text."
-    },
-    "style_guidelines": {
-      "tone": "Calm, precise, minimal",
-      "notes": "Short purpose notes per pose (why it’s here); no long prose",
-      "consistency": "Keep naming consistent with dataset"
-    },
-    "conversation_approach": {
-      "clarification": "If required info (e.g., weight_kg) is missing, assume sensible defaults (e.g., 70 kg, heat_factor 1.0) and proceed without asking questions.",
-      "constraints_handling": "Honor any given injuries/limitations strictly"
-    },
-    "structure": [
-      {
-        "step": 1,
-        "title": "Final Sequence (Template Markdown)",
-        "description": "Output ONLY the fully filled vinyasa sequence template with all sections and tables.",
-        "required": true
-      }
-    ],
-    "response_guidelines": {
-      "generation_requests": {
-        "description": "When asked to generate a class or sequence, produce only the completed template.",
-        "patterns": [
-          "Generate a [theme] class",
-          "Create a [duration] [intensity] sequence",
-          "Make a feel-good flow focusing on hips/chest/spine",
-          "Add compression like Happy Baby and include side splits"
-        ]
+    "sequence_phases": {
+      "phase_1": {
+        "name": "Warm-Up",
+        "category": "floor_start",
+        "description": "Gentle preparation poses on the floor",
+        "duration_percentage": 20
       },
-      "adjustment_requests": {
-        "description": "When asked to modify a class (swap poses, add/remove), regenerate the whole template with changes applied.",
-        "patterns": [
-          "Switch X and Y",
-          "Remove Z",
-          "Add [pose] between parts",
-          "Avoid [constraint]"
-        ]
+      "phase_2": {
+        "name": "Flow / Openers",
+        "category": "standing_peak",
+        "description": "Standing flow and opening poses",
+        "duration_percentage": 30
+      },
+      "phase_3": {
+        "name": "Peak / Deep Work",
+        "category": "standing_peak",
+        "description": "Most challenging standing poses",
+        "duration_percentage": 30
+      },
+      "phase_4": {
+        "name": "Cool Down",
+        "category": "floor_cooldown",
+        "description": "Relaxing floor poses and final rest",
+        "duration_percentage": 20
       }
     }
+  },
+  "constraints": [
+    "ONLY use the poses listed in pose_dataset",
+    "Use exact MET values from pose_dataset",
+    "Follow sequence_phases configuration for structure and timing",
+    "Respect pose_categories flow patterns",
+    "Apply heat_adjustments when room is heated",
+    "Calculate calories using calorie_formula",
+    "Include all response_format template sections"
+  ],
+  "response_format": {
+    "template": "# [Title]\n\n**Style:** Vinyasa Flow\n**Duration:** X minutes\n**Intensity:** [Low/Medium/High]\n**Estimated Calories:** X cal\n**Focus:** [focus areas]\n\n## Part 1 – [phase_1.name] ([phase_1.duration_percentage]% of total time)\n- [poses from phase_1.category only] (X min) – purpose\n\n## Part 2 – [phase_2.name] ([phase_2.duration_percentage]% of total time)\n- [poses from phase_2.category only] (X min) – purpose\n\n## Part 3 – [phase_3.name] ([phase_3.duration_percentage]% of total time)\n- [poses from phase_3.category only] (X min) – purpose\n\n## Part 4 – [phase_4.name] ([phase_4.duration_percentage]% of total time)\n- [poses from phase_4.category only] (X min) – purpose\n\n## Scorecard\n**Weight:** X kg | **Heat Factor:** X | **Total Calories:** X\n\n| Section | Pose | Minutes | MET | Calories |\n|---------|------|---------|-----|----------|\n| Phase Name | Pose Name | X | X.X | XX |\n\n## Antagonist Balance Index (ABI)\n| Muscle Group | Poses Used | Balance Score |\n|--------------|-------------|---------------|\n| Example | Pose names | 0.XX |\n\n## Instructor Notes\n[Brief notes on props, breath, pacing]",
+    "rules": [
+      "Use EXACT pose names and MET values from dataset",
+      "Follow sequence_phases configuration for structure and timing",
+      "Each phase uses poses only from its specified category",
+      "Calculate phase duration: total_minutes × (phase.duration_percentage / 100)",
+      "Calculate calories: MET × weight_kg × (minutes/60) × heat_factor",
+      "Include all required sections",
+      "No commentary outside the template"
+    ]
   }
 }
