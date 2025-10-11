@@ -2,8 +2,12 @@
 """
 Standalone WebUI Starter
 
-This script starts Ollama and Open WebUI without any specialized assistant.
-This gives you a generic AI chat interface with access to any models you have.
+This script starts Open WebUI that connects to a running Ollama instance.
+Part of the new modular workflow: Ollama + Custom Models + WebUI (all separate).
+
+Prerequisites:
+- Ollama must be running (use: python start_ollama.py)
+- Custom models can be deployed separately (use: python start_custom_assistant.py)
 """
 
 import sys
@@ -20,54 +24,53 @@ from webui_manager import WebUIManager
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Start standalone Ollama + WebUI (no specialized assistant)",
+        description="Start WebUI for running Ollama instance",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python start_webui.py                 # Start with GPU acceleration
-  python start_webui.py --cpu           # Use CPU-only mode
-  python start_webui.py --stop          # Stop the services
+  python start_webui.py                 # Start WebUI
+  python start_webui.py --stop          # Stop WebUI
   python start_webui.py --status        # Check status
   python start_webui.py --open          # Open WebUI in browser
-  python start_webui.py --logs          # Show container logs
+  python start_webui.py --logs          # Show WebUI logs
+
+New Modular Workflow:
+  1. python start_ollama.py              # Start Ollama first
+  2. python start_custom_assistant.py templates/your_template.json  # Deploy custom model
+  3. python start_webui.py               # Start WebUI (this script)
 
 Access:
   WebUI: http://localhost:3000
   Ollama API: http://localhost:11434
 
-Notes:
-  - This provides generic AI chat without specialized prompts
-  - You can chat with any Ollama models you have installed
-  - Use assistant scripts for specialized functionality (yoga, churn analysis)
+Prerequisites:
+  - Ollama must be running (check with: python start_ollama.py --status)
         """
     )
     
-    parser.add_argument("--cpu", action="store_true", 
-                       help="Use CPU-only mode (no GPU acceleration)")
     parser.add_argument("--stop", action="store_true", 
-                       help="Stop the services")
+                       help="Stop WebUI service")
     parser.add_argument("--status", action="store_true", 
-                       help="Check status of running services")
+                       help="Check status of WebUI service")
     parser.add_argument("--open", action="store_true", 
                        help="Open WebUI in default browser")
     parser.add_argument("--logs", action="store_true", 
-                       help="Show container logs")
+                       help="Show WebUI container logs")
     parser.add_argument("--remove-volumes", action="store_true", 
-                       help="Remove Docker volumes when stopping (complete cleanup)")
+                       help="Remove WebUI volumes when stopping (complete cleanup)")
     
     args = parser.parse_args()
     
-    # Build compose files list
-    compose_files = ["docker-compose.ollama.yml", "docker-compose.webui.yml"]
-    if not args.cpu:
-        compose_files.append("docker-compose.gpu-override.yml")
+    # Only WebUI compose file needed (Ollama runs separately)
+    compose_files = ["docker-compose.webui.yml"]
     
     # Create managers for status checking
+    from ollama_manager import OllamaManager
     ollama_manager = OllamaManager()
     webui_manager = WebUIManager()
     
     if args.stop:
-        print("🛑 Stopping Ollama + WebUI services...")
+        print("🛑 Stopping WebUI service...")
         additional_args = "-v" if args.remove_volumes else ""
         cmd = UtilityManager.build_compose_command(
             compose_files=compose_files,
@@ -79,9 +82,13 @@ Notes:
         return
     
     if args.status:
-        print("🔍 Checking service status...")
-        print("\n📊 Container Status:")
-        UtilityManager.run_subprocess("docker ps --filter name=ollama --filter name=webui", show_output=True)
+        print("🔍 Checking WebUI service status...")
+        print("\n📊 WebUI Container Status:")
+        UtilityManager.run_subprocess("docker ps --filter name=webui", show_output=True)
+        
+        # Check if Ollama is running
+        is_running, status_msg = ollama_manager.get_api_status()
+        print(f"\n🤖 Ollama Status: {status_msg}")
         return
     
     if args.open:
@@ -90,25 +97,22 @@ Notes:
         return
     
     if args.logs:
-        print("📋 Showing container logs...")
-        print("\n🤖 Ollama logs:")
-        UtilityManager.run_subprocess("docker logs ollama --tail 20", show_output=True)
-        print("\n🌐 WebUI logs:")
+        print("📋 Showing WebUI container logs...")
         UtilityManager.run_subprocess("docker logs open-webui --tail 20", show_output=True)
         return
     
-    # Start services
-    mode_info = "CPU-only mode" if args.cpu else "GPU-accelerated mode"
-    print(f"🚀 Starting Ollama + WebUI ({mode_info})...")
-    print("=" * 50)
-    
-    # Check system requirements
-    if not UtilityManager.check_system_requirements(
-        model_name="Generic Ollama Models",
-        model_description="Standalone Ollama + WebUI setup",
-        vram_requirement="8GB+ RAM (CPU mode)" if args.cpu else "8GB+ VRAM (GPU mode)"
-    ):
+    # Check if Ollama is running first
+    is_running, status_msg = ollama_manager.get_api_status()
+    if not is_running:
+        print("❌ Ollama is not running!")
+        print("💡 Start Ollama first: python start_ollama.py")
         return False
+    
+    print(f"✅ Ollama detected: {status_msg}")
+    
+    # Start WebUI service
+    print("🚀 Starting WebUI Service...")
+    print("=" * 50)
     
     # Ensure the external network exists
     UtilityManager.ensure_docker_network("ai_network")
@@ -127,33 +131,31 @@ Notes:
         print(f"❌ Failed to start containers: {result.stderr}")
         return False
     
-    print("✅ Containers started successfully")
-    print("⏳ Waiting for services to be ready...")
+    print("✅ WebUI container started")
+    print("⏳ Waiting for WebUI to be ready...")
     
-    # Wait for services
-    if not ollama_manager.wait_for_ready(timeout=120):
-        print("❌ Ollama service failed to start")
-        return False
-    
-    if not webui_manager.wait_for_ready(timeout=180):
+    # Wait for WebUI
+    if not webui_manager.wait_for_api_with_progress(retries=36):  # 3 minutes
         print("❌ WebUI service failed to start")
         return False
     
     print()
-    print("🎉 Ollama + WebUI is ready!")
+    print("🎉 WebUI is ready!")
     print()
     print("🌐 Access WebUI at: http://localhost:3000")
     print("🤖 Ollama API at: http://localhost:11434")
     print()
-    print("💡 What you can do:")
-    print("   • Chat with any Ollama models you have installed")
-    print("   • Pull new models through the WebUI")
-    print("   • Upload and analyze documents")
-    print("   • Use as a general-purpose AI assistant")
+    print("💡 Available models:")
+    models = ollama_manager.list_models()
+    if models:
+        for model in models:
+            print(f"   • {model}")
+    else:
+        print("   No models found - deploy some with: python start_custom_assistant.py")
     print()
-    print("🎯 For specialized assistants, use:")
-    print("   • python start_yoga_assistant.py (yoga sequences)")
-    print("   • python start_qwen_churn_assistant.py (business analysis)")
+    print("🎯 Deploy custom assistants:")
+    print("   • python start_custom_assistant.py templates/yoga_sequence_system_prompt.template.json")
+    print("   • python start_custom_assistant.py templates/qwen_churn_system_prompt.template.json")
     
     return True
 

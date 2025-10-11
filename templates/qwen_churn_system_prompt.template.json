@@ -1,5 +1,6 @@
 {
   "name": "Qwen Churn Assistant System Prompt",
+  "model_name": "churn-analysis",
   "description": "Specialized churn analysis assistant for business users",
   "model_parameters": {
     "temperature": 0.3,

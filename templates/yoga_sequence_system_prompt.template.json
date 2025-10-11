@@ -1,5 +1,6 @@
 {
   "name": "Yoga Sequence Generator System Prompt",
+  "model_name": "yoga-sequence-generator",
   "description": "Specialized assistant that generates safe, goal-based yoga class sequences and validates calories, balance, and flow using the project dataset and template.",
   "model_parameters": {
     "temperature": 0.2,

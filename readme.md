@@ -1,16 +1,57 @@
-## 🎯 **Dual-Mode AI Platform**
-This project provides a **fully local AI infrastructure** with two specialized modes:
+# 🎯 **AI-Server: Complete Local AI Infrastructure**
+
+## 📋 **Table of Contents**
+
+### Core Platform
+- [🎯 Platform Overview](#-platform-overview)
+- [🚀 Key Features](#-key-features) 
+- [🏗️ System Architecture](#%EF%B8%8F-system-architecture)
+- [📦 Tech Stack](#-tech-stack)
+- [📂 Project Structure](#-project-structure)
+
+### Getting Started
+- [📋 Prerequisites](#-prerequisites)
+- [🧪 Development Assistant Mode](#-development-assistant-mode)
+- [📊 Business Analytics Mode](#-business-analytics-mode)
+
+### New Modular Workflow
+- [🔄 Modular Workflow Overview](#-modular-workflow-overview)
+- [🚀 Quick Start Guide](#-quick-start-guide)
+- [📋 Management Commands](#-management-commands)
+- [🔧 Troubleshooting](#-troubleshooting)
+
+### Framework Documentation
+- [🔧 OllamaCustomModel Framework](#-ollamacustommodel-framework)
+- [📝 Template System](#-template-system)
+- [🏗️ Architecture Details](#%EF%B8%8F-architecture-details)
+
+### Additional Resources
+- [🔍 Verification & Testing](#-verification--testing)
+- [🙌 Acknowledgments](#-acknowledgments)
+- [📌 Repository](#-repository)
+
+---
+
+## 🎯 **Platform Overview**
+
+This project provides a **fully local AI infrastructure** with multiple specialized modes:
 
 ### 1. **Development Assistant Mode** 💻
 - 💬 Inline prompt support in VS Code via **Continue**
 - ⚙️ **DeepSeek Coder V2 Lite** served by **llama.cpp** standalone server
 - 🧠 Code generation, editing, and autocomplete capabilities
 
-### 2. **Business Analytics Mode** 📊 **NEW!**
+### 2. **Business Analytics Mode** 📊
 - 🔍 **Qwen Churn Assistant**: Specialized customer churn analysis
 - 📈 Natural language data analysis (no coding required)
 - 🎯 Business-focused insights and recommendations
 - 🤖 Powered by Qwen2.5-Instruct with specialized system prompts
+
+### 3. **Modular Component System** 🔄 **NEW!**
+- 🎛️ **Manual Control**: Start Ollama, deploy custom models, launch WebUI independently
+- 🔧 **Better Debugging**: Isolate issues to specific components
+- ⚡ **Reliable Startup**: No complex dependency chains
+- 🔄 **Flexible Deployment**: Mix and match components as needed
 
 ## 🚀 Key Features
 
@@ -68,12 +109,11 @@ This project provides a **fully local AI infrastructure** with two specialized m
 
 This repository uses a **template-driven architecture** for maintainable, modular configuration:
 
-### 🚀 **Entry Points**
-- **`start_webui.py`**: Standalone Ollama + WebUI (generic AI chat, no specialized prompts)
-- **`start_yoga_assistant.py`**: Yoga sequence generation assistant (fitness class planning)
-- **`start_qwen_churn_assistant.py`**: Business analytics assistant (churn analysis, natural language)
-- **`start_llama_server.py`**: llama.cpp server mode (CUDA-enabled, standalone inference engine)
-- **`start_custom_assistant.py`**: Generic launcher for any template-based assistant
+### 🚀 **Entry Points (New Modular Workflow)**
+- **`start_ollama.py`**: Start Ollama service manually (Step 1)
+- **`start_custom_assistant.py`**: Deploy custom models to running Ollama (Step 2)
+- **`start_webui.py`**: Start WebUI separately to connect to Ollama (Step 3)
+- **`start_llama_server.py`**: llama.cpp server mode (alternative to Ollama)
 
 ### ⚙️ **Core Management Modules**
 - **`utility_manager.py`**: Centralized subprocess operations and error handling
@@ -83,13 +123,31 @@ This repository uses a **template-driven architecture** for maintainable, modula
 - **`ollama_custom_model.py`**: Generalized framework for specialized AI assistants
 - **`network_manager.py`**: Network utilities and Docker Compose management
 
-### 🏗️ **Modular Architecture Benefits**
-- **🔧 Single Responsibility**: Each manager handles one specific service
-- **🧪 Testable**: Individual components can be tested in isolation
-- **📖 Readable**: Code organized by functionality, not mixed concerns
-- **♻️ Reusable**: Managers can be imported and used in other projects
-- **⚙️ Self-Contained**: Each manager contains its own configuration
-- **🔄 Maintainable**: Modify specific components without affecting others
+### 🔄 **New Modular Workflow**
+
+The new workflow separates each component for maximum flexibility:
+
+```bash
+# Step 1: Start Ollama service
+python start_ollama.py              # or: python start_ollama.py --cpu
+
+# Step 2: Deploy custom models (optional)
+python start_custom_assistant.py templates/yoga_sequence_system_prompt.template.json
+python start_custom_assistant.py templates/qwen_churn_system_prompt.template.json
+
+# Step 3: Start WebUI separately  
+python start_webui.py
+
+# Access: http://localhost:3000
+```
+
+### 🏗️ **Architecture Benefits**
+- **� Component Independence**: Start/stop services individually
+- **🧪 Easier Debugging**: Isolate issues to specific components
+- **📖 Clear Separation**: Ollama → Custom Models → WebUI
+- **♻️ Flexible Deployment**: Mix and match components as needed
+- **⚙️ Manual Control**: Full control over each service lifecycle
+- **🔄 Reliable Startup**: No complex dependency chains
 
 ### 📋 **Template System** 
 ```
@@ -160,7 +218,7 @@ The system uses **DeepSeek Coder V2 Lite** with various quantization levels:
 
 ---
 
-## 🧪 **How to Use** - Development Assistant Mode
+## 🧪 **Development Assistant Mode**
 
 ### 1. **Clone the Repository**
 ```bash
@@ -290,6 +348,272 @@ apiBase: http://your-tailscale-hostname.ts.net:11435/v1  # For standalone llama.
 
 ---
 
+## 🔄 **Modular Workflow Overview**
+
+The AI-Server now uses a **modular workflow** where each component runs independently:
+
+1. **Ollama Service** (runs models)
+2. **Custom Model Deployment** (optional specialization)  
+3. **WebUI Interface** (user interaction)
+
+This provides better control, easier debugging, and more reliable startups.
+
+### 🚀 **Quick Start Guide**
+
+#### Step 1: Start Ollama
+```bash
+python start_ollama.py              # GPU mode
+python start_ollama.py --cpu        # CPU mode
+```
+
+#### Step 2: Deploy Custom Models (Optional)
+```bash
+# Deploy yoga assistant
+python start_custom_assistant.py templates/yoga_sequence_system_prompt.template.json
+
+# Deploy business assistant  
+python start_custom_assistant.py templates/qwen_churn_system_prompt.template.json
+
+# Custom deployment
+python start_custom_assistant.py templates/my_template.json --model qwen2.5:14b-instruct --name my-assistant
+```
+
+#### Step 3: Start WebUI
+```bash
+python start_webui.py
+```
+
+#### Access Points
+- **WebUI**: http://localhost:3000
+- **Ollama API**: http://localhost:11434
+
+### 📋 **Management Commands**
+
+#### Ollama Management
+```bash
+python start_ollama.py --status     # Check if running
+python start_ollama.py --pull       # Pull default models
+python start_ollama.py --list       # List available models
+python start_ollama.py --logs       # Show logs
+python start_ollama.py --stop       # Stop service
+```
+
+#### Custom Model Management
+```bash
+python start_custom_assistant.py templates/template.json --list    # List custom models
+python start_custom_assistant.py templates/template.json --test    # Test model
+python start_custom_assistant.py templates/template.json --remove  # Remove model
+```
+
+#### WebUI Management  
+```bash
+python start_webui.py --status      # Check status
+python start_webui.py --open        # Open in browser
+python start_webui.py --logs        # Show logs
+python start_webui.py --stop        # Stop WebUI
+```
+
+### 🔧 **Troubleshooting**
+
+#### Common Issues
+1. **"Ollama is not running"** → Start Ollama first: `python start_ollama.py`
+2. **"Model not found"** → Deploy custom model or pull base model
+3. **"WebUI won't start"** → Check Ollama status: `python start_ollama.py --status`
+
+#### Debug Steps
+```bash
+# Check all services
+python start_ollama.py --status
+python start_webui.py --status
+
+# View logs
+python start_ollama.py --logs
+python start_webui.py --logs
+
+# Clean restart
+python start_ollama.py --stop
+python start_webui.py --stop
+python start_ollama.py
+python start_webui.py
+```
+
+#### Available Templates
+- `templates/yoga_sequence_system_prompt.template.json` - Yoga sequence generation
+- `templates/qwen_churn_system_prompt.template.json` - Business churn analysis
+- Create your own templates following the same JSON structure
+
+#### Benefits of New Workflow
+✅ **Independent Services** - Start/stop components individually  
+✅ **Better Debugging** - Isolate issues to specific components  
+✅ **Flexible Deployment** - Mix and match as needed  
+✅ **Reliable Startup** - No complex dependency chains  
+✅ **Manual Control** - Full control over service lifecycle  
+✅ **Easier Development** - Test components in isolation  
+
+#### Migration from Old Scripts
+**Old Way (Removed)**
+```bash
+# These scripts are no longer available
+python start_yoga_assistant.py      # ❌ Removed
+python start_qwen_churn_assistant.py # ❌ Removed
+python start_ollama_server.py       # ❌ Removed
+```
+
+**New Way**
+```bash
+# Modular approach
+python start_ollama.py              # ✅ Start Ollama
+python start_custom_assistant.py templates/yoga_sequence_system_prompt.template.json  # ✅ Deploy yoga model
+python start_webui.py               # ✅ Start WebUI
+```
+
+---
+
+## 🔧 **OllamaCustomModel Framework**
+
+The `OllamaCustomModel` class provides a flexible framework for creating specialized AI assistants using Ollama models with custom system prompts and configurations. This system generalizes the original approach to work with any template-based AI assistant.
+
+### Framework Features
+
+- 🔧 **Template-based Configuration**: Load custom system prompts and model parameters from JSON templates
+- 🐳 **Docker Infrastructure Management**: Automated Docker Compose setup with project-specific configurations  
+- 🧠 **Model Customization**: Create specialized models with embedded system prompts
+- ⚡ **CPU/GPU Flexibility**: Support for both CPU-only and GPU-accelerated deployments
+- 🔄 **Factory Methods**: Easy creation of specific assistant types
+- ✅ **Template Validation**: Ensure template files have proper structure and valid parameters
+
+### Quick Framework Usage
+
+#### Using Factory Methods
+```python
+from ollama_custom_model import OllamaCustomModel
+
+# Create a yoga sequence assistant
+yoga_assistant = OllamaCustomModel.create_yoga_assistant(cpu_mode=True)
+yoga_assistant.start_infrastructure()
+
+# Create a churn analysis assistant  
+churn_assistant = OllamaCustomModel.create_churn_assistant(cpu_mode=False)
+churn_assistant.start_infrastructure()
+```
+
+#### Using Custom Templates
+```python
+# Create an assistant from any template file
+custom_assistant = OllamaCustomModel(
+    template_path="templates/my_custom_template.json",
+    cpu_mode=False,
+    project_name="my-assistant"
+)
+custom_assistant.start_infrastructure()
+```
+
+### 📝 **Template System**
+
+Templates are JSON files that define the assistant's behavior and configuration:
+
+```json
+{
+  "name": "My Specialized Assistant",
+  "description": "A specialized AI assistant for specific tasks",
+  "system_prompt": "You are a specialized assistant that...",
+  "model_parameters": {
+    "temperature": 0.2,
+    "top_k": 40,
+    "top_p": 0.9,
+    "repeat_penalty": 1.1
+  },
+  "recommended_model": "qwen2.5:7b-instruct",
+  "usage_instructions": "Tips for using this assistant effectively"
+}
+```
+
+#### Required Template Fields
+- `name`: Display name for the assistant
+- `description`: Brief description of the assistant's purpose  
+- `system_prompt`: The system prompt that defines the assistant's behavior
+
+#### Optional Template Fields
+- `model_parameters`: Ollama model parameters (temperature, top_k, etc.)
+- `recommended_model`: Suggested base model to use
+- `usage_instructions`: Instructions shown to users after startup
+- Additional fields for specialized configurations
+
+### Framework Examples
+
+#### Example 1: Business Strategy Assistant
+```json
+{
+  "name": "Business Strategy Assistant", 
+  "description": "Specialized assistant for business strategy and analysis",
+  "system_prompt": "You are a business strategy expert who provides clear, actionable insights for strategic decision-making. Focus on market analysis, competitive positioning, and growth strategies. Always provide specific recommendations with supporting rationale.",
+  "model_parameters": {
+    "temperature": 0.3,
+    "top_k": 50,
+    "top_p": 0.85
+  }
+}
+```
+
+#### Example 2: Educational Tutor
+```json
+{
+  "name": "Math Tutor Assistant",
+  "description": "Patient and encouraging math tutor for students",
+  "system_prompt": "You are a patient, encouraging math tutor. Break down complex problems into manageable steps, provide clear explanations, and offer positive reinforcement. Adapt your teaching style to the student's level and learning pace.",
+  "model_parameters": {
+    "temperature": 0.1,
+    "top_k": 30,
+    "top_p": 0.9
+  },
+  "usage_instructions": "Ask math questions at any level - from basic arithmetic to advanced calculus"
+}
+```
+
+### Advanced Framework Configuration
+
+#### Model Selection
+The system intelligently selects appropriate models based on:
+1. **Explicit specification**: Via `model_name` parameter or `recommended_model` in template
+2. **Template analysis**: Automatic inference based on template content
+3. **Hardware constraints**: CPU vs GPU mode considerations
+4. **Size preferences**: Large model flag for enhanced capabilities
+
+#### Project Isolation
+Each assistant instance is completely isolated with:
+- Separate Docker containers
+- Independent data volumes  
+- Project-specific configurations
+- Isolated model storage
+
+#### Framework API Reference
+
+**OllamaCustomModel Class Constructor**
+```python
+OllamaCustomModel(
+    template_path: str,
+    model_name: str = None,
+    cpu_mode: bool = False,
+    large_model: bool = False,
+    quiet_mode: bool = False,
+    project_name: str = None
+)
+```
+
+**Key Methods**
+- `start_infrastructure()`: Start the complete infrastructure
+- `stop_infrastructure(remove_volumes=False)`: Stop infrastructure 
+- `status()`: Check status of all components
+- `create_custom_model()`: Create model with embedded system prompt
+- `wait_for_services()`: Wait for services to be ready
+
+**Factory Methods**
+- `create_yoga_assistant(**kwargs)`: Create yoga sequence assistant
+- `create_churn_assistant(**kwargs)`: Create churn analysis assistant
+- `create_from_template(template_path, **kwargs)`: Generic factory method
+
+---
+
 ## 🏗️ **Template-Driven Architecture**
 
 This project pioneered a **template-based approach** to AI infrastructure deployment, providing several key advantages:
@@ -388,11 +712,11 @@ For remote access via Tailscale, replace `localhost` with your Tailscale hostnam
 
 ---
 
-## 📊 **Qwen Churn Assistant** - Business Analytics Mode
+## 📊 **Business Analytics Mode**
 
 **🎯 Purpose**: Transform customer data into actionable business insights through natural language conversations.
 
-The Qwen Churn Assistant is a specialized business intelligence system that analyzes customer churn data without requiring any coding skills. Simply upload your CSV files and ask questions in plain English!
+The Business Analytics Mode provides specialized business intelligence capabilities that analyze customer churn data without requiring any coding skills. Simply upload your CSV files and ask questions in plain English!
 
 ### � **Key Features**
 - **🗣️ Natural Language Interface**: Ask business questions in plain English
