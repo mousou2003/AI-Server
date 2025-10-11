@@ -494,7 +494,8 @@ SYSTEM \"\"\"{self.template_data['system_prompt']}\"\"\"
             # Start new containers
             print("   Starting new containers...")
             start_cmd = self.get_compose_command("up", "-d")
-            result = self.utility_manager.run_subprocess(start_cmd, check=False)
+            print(f"   Command: {start_cmd}")
+            result = self.utility_manager.run_subprocess(start_cmd, check=False, timeout=120)  # 2 minute timeout
             
             if result.returncode != 0:
                 print(f"❌ Failed to start containers: {result.stderr}")

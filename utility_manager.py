@@ -8,23 +8,32 @@ class UtilityManager:
     """Utility functions for the application"""
     
     @staticmethod
-    def run_subprocess(cmd, check=True, show_output=False, timeout=None):
-        if show_output:
-            # Show output in real-time for commands like docker compose
-            print(f"🔧 Running: {cmd}")
-            result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8', errors='ignore', timeout=timeout)
-            if check and result.returncode != 0:
-                print(f"❌ Command failed: {cmd}")
+    def run_subprocess(cmd, check=True, show_output=False, timeout=300):  # Default 5 minute timeout
+        try:
+            if show_output:
+                # Show output in real-time for commands like docker compose
+                print(f"🔧 Running: {cmd}")
+                result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8', errors='ignore', timeout=timeout)
+                if check and result.returncode != 0:
+                    print(f"❌ Command failed: {cmd}")
+                    sys.exit(1)
+                return result
+            else:
+                # Capture output for other commands
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=timeout)
+                if check and result.returncode != 0:
+                    print(f"❌ Command failed: {cmd}")
+                    print(result.stderr.strip())
+                    sys.exit(1)
+                return result
+        except subprocess.TimeoutExpired:
+            print(f"⏰ Command timed out after {timeout} seconds: {cmd}")
+            print("💡 This usually means Docker containers are taking too long to start")
+            print("💡 Try using --cpu mode or check Docker resource allocation")
+            if check:
                 sys.exit(1)
-            return result
-        else:
-            # Capture output for other commands
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=timeout)
-            if check and result.returncode != 0:
-                print(f"❌ Command failed: {cmd}")
-                print(result.stderr.strip())
-                sys.exit(1)
-            return result
+            # Return a mock result for timeout cases
+            return subprocess.CompletedProcess(cmd, 124, "", "Command timed out")
     
     @staticmethod
     def check_system_requirements(model_name, model_description, vram_requirement):

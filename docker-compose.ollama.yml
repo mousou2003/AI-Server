@@ -30,11 +30,11 @@ services:
         reservations:
           memory: 8g   # Minimum needed for 7B model
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:11434/api/tags || curl -f http://localhost:11434/api/tags || exit 1"]
       interval: 60s   # Check every minute instead of 30s
-      timeout: 10s    # Shorter timeout for simple API check
-      retries: 3      # Fewer retries needed
-      start_period: 90s  # Give more time for initial startup
+      timeout: 15s    # Give more time for the health check
+      retries: 5      # More retries for reliability
+      start_period: 120s  # Give even more time for initial startup
     networks:
       - ai_network
 

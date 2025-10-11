@@ -1,0 +1,18 @@
+# Health Check Bypass Override
+# Use this file if health checks are causing startup issues
+# Usage: Add this file to your compose command to disable health checks
+# Example: docker compose -f docker-compose.ollama.yml -f docker-compose.webui.yml -f docker-compose.no-healthcheck.yml up -d
+
+services:
+  ollama:
+    healthcheck:
+      disable: true
+
+  open-webui:
+    depends_on:
+      - ollama  # Simple dependency without health check
+    healthcheck:
+      disable: true
+    
+# Note: Without health checks, containers may start before services are ready
+# Allow extra time for services to initialize before accessing them

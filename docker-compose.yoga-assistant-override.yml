@@ -16,11 +16,11 @@ services:
     networks:
       - ai_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:11434/api/tags || curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 60s
+      timeout: 15s
       retries: 5
-      start_period: 30s
+      start_period: 120s  # Give more time for Ollama to initialize on first startup
 
   open-webui:
     container_name: open-webui-yoga-assistant
