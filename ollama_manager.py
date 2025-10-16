@@ -11,7 +11,7 @@ class OllamaManager:
 
     def remove_custom_model(self, custom_model_name):
         """
-        Remove a custom model from Ollama.
+        Remove a custom model from Ollama and delete the local Modelfile.
         Args:
             custom_model_name (str): Name of the custom model to remove
         Returns:
@@ -20,8 +20,19 @@ class OllamaManager:
         try:
             cmd = f'docker exec {self.config["name"]} ollama rm {custom_model_name}'
             result = UtilityManager.run_subprocess(cmd, check=False, timeout=60)
+            modelfile_path = Path('.ollama') / f'Modelfile.{custom_model_name}'
+            file_deleted = False
+            if modelfile_path.exists():
+                try:
+                    modelfile_path.unlink()
+                    print(f"   🗑️  Deleted local Modelfile: {modelfile_path}")
+                    file_deleted = True
+                except Exception as e:
+                    print(f"   ⚠️  Could not delete local Modelfile: {e}")
             if result.returncode == 0:
                 print(f"   ✅ Removed custom model: {custom_model_name}")
+                if file_deleted:
+                    print(f"   ✅ Local Modelfile also deleted.")
                 return True
             else:
                 print(f"   ⚠️  Could not remove custom model: {result.stderr}")
