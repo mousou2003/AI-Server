@@ -66,6 +66,7 @@ validation_targets:
   - abi_min: 0.75
   - duration_range_minutes: [45, 90]
   - allowed_intensity: [Low, Medium, High]
+  - weight_kg: default [70]
 
 Constraints (MUST):
   - Use ONLY poses/METs/categories EXACTLY as in pose_dataset (no inventing/renaming).
