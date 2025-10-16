@@ -8,6 +8,27 @@ from utility_manager import UtilityManager
 
 
 class OllamaManager:
+
+    def remove_custom_model(self, custom_model_name):
+        """
+        Remove a custom model from Ollama.
+        Args:
+            custom_model_name (str): Name of the custom model to remove
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            cmd = f'docker exec {self.config["name"]} ollama rm {custom_model_name}'
+            result = UtilityManager.run_subprocess(cmd, check=False, timeout=60)
+            if result.returncode == 0:
+                print(f"   ✅ Removed custom model: {custom_model_name}")
+                return True
+            else:
+                print(f"   ⚠️  Could not remove custom model: {result.stderr}")
+                return False
+        except Exception as e:
+            print(f"   ❌ Error removing custom model: {e}")
+            return False
     def __init__(self):
         import os
         try:
@@ -104,79 +125,139 @@ class OllamaManager:
         
         print("✅ Ollama model pulling completed")
 
-    def create_custom_model(self, base_model, custom_model_name, modelfile_content, modelfile_path=None):
+    def create_custom_model(self, base_model, custom_model_name, template_file_path=None, modelfile_path=None):
         """
-        Create a custom model in Ollama with specified Modelfile content
-        
+
+        Create a custom model in Ollama by copying a pre-formatted Modelfile.
+
         Args:
-            base_model (str): Base model name (e.g., "qwen2.5:7b-instruct")
+            base_model (str): Base model name (for compatibility, not used)
             custom_model_name (str): Name for the custom model
-            modelfile_content (str): Content of the Modelfile
-            modelfile_path (str, optional): Local path to save the Modelfile
-            
+            template_file_path (str): Path to the Modelfile
+            modelfile_path (str, optional): Local path to save the Modelfile (defaults to .ollama/Modelfile.<custom_model_name>)
+
         Returns:
             bool: True if successful, False otherwise
         """
         print(f"🔧 Creating custom model: {custom_model_name}")
-        
         try:
-            # Save Modelfile locally if path provided
-            if modelfile_path:
-                with open(modelfile_path, 'w', encoding='utf-8') as f:
-                    f.write(modelfile_content)
-                print(f"   ✅ Saved Modelfile: {modelfile_path}")
-            
+
+            import os
+            from pathlib import Path
+            # Determine .ollama directory and Modelfile path
+            models_dir = Path('.ollama')
+            models_dir.mkdir(parents=True, exist_ok=True)
+            local_modelfile_path = models_dir / f"Modelfile.{custom_model_name}"
+
+            # Read template and write to .ollama/Modelfile.<custom_model_name>
+            if not template_file_path:
+                raise ValueError("template_file_path is required.")
+            with open(template_file_path, 'r', encoding='utf-8') as f:
+                modelfile_content = f.read()
+            with open(local_modelfile_path, 'w', encoding='utf-8') as f:
+                f.write(modelfile_content)
+            print(f"   ✅ Saved Modelfile: {local_modelfile_path}")
+
             # Use /tmp directory in container (which exists)
             container_modelfile_path = f"/tmp/Modelfile.{custom_model_name}"
-            
-            # Method 1: Try to create Modelfile directly in container (preferred)
-            # Escape quotes and newlines for shell
-            escaped_content = modelfile_content.replace('"', '\\"').replace('\n', '\\n')
-            direct_cmd = f'docker exec {self.config["name"]} sh -c "echo -e \\"{escaped_content}\\" > {container_modelfile_path}"'
-            
-            direct_result = subprocess.run(direct_cmd, shell=True, capture_output=True, text=True,
-                                         encoding='utf-8', errors='ignore', timeout=60)
-            
-            if direct_result.returncode != 0:
-                print(f"   ⚠️  Direct method failed, trying file copy method...")
-                
-                # Method 2: Create temp file and copy (fallback)
-                import tempfile
-                if modelfile_path:
-                    temp_path = modelfile_path
-                else:
-                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.modelfile', encoding='utf-8') as f:
-                        f.write(modelfile_content)
-                        temp_path = f.name
-                
-                copy_cmd = f'docker cp "{temp_path}" {self.config["name"]}:{container_modelfile_path}'
-                copy_result = subprocess.run(copy_cmd, shell=True, capture_output=True, text=True,
-                                           encoding='utf-8', errors='ignore', timeout=60)
-                
-                if copy_result.returncode != 0:
-                    print(f"   ⚠️  Could not copy Modelfile to container: {copy_result.stderr}")
-                    return False
-                    
-                # Clean up temp file if we created one
-                if not modelfile_path:
-                    import os
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass
-            
+            copy_cmd = f'docker cp "{local_modelfile_path}" {self.config["name"]}:{container_modelfile_path}'
+            copy_result = subprocess.run(
+                copy_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=60
+            )
+            if copy_result.returncode != 0:
+                print(f"   ⚠️  Could not copy Modelfile to container: {copy_result.stderr}")
+                return False
+
             # Create the custom model
             create_cmd = f'docker exec {self.config["name"]} ollama create {custom_model_name} -f {container_modelfile_path}'
-            result = subprocess.run(create_cmd, shell=True, capture_output=True, text=True,
-                                  encoding='utf-8', errors='ignore', timeout=300)
-            
+            result = subprocess.run(
+                create_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=300
+            )
+
             if result.returncode == 0:
                 print(f"   ✅ Created custom model: {custom_model_name}")
                 return True
             else:
                 print(f"   ⚠️  Could not create custom model: {result.stderr}")
                 return False
-                
+
+        except subprocess.TimeoutExpired:
+            print("   ⏰ Model creation timed out")
+            return False
+        except Exception as e:
+            print(f"   ❌ Error creating custom model: {e}")
+            return False
+
+            # Save Modelfile locally if path provided
+            if modelfile_path:
+                with open(modelfile_path, 'w', encoding='utf-8') as f:
+                    f.write(modelfile_content)
+                print(f"   ✅ Saved Modelfile: {modelfile_path}")
+
+            # Use /tmp directory in container (which exists)
+            container_modelfile_path = f"/tmp/Modelfile.{custom_model_name}"
+
+            # Always use file copy method to ensure real newlines
+            import tempfile
+            if modelfile_path:
+                temp_path = modelfile_path
+            else:
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.modelfile', encoding='utf-8') as f:
+                    f.write(modelfile_content)
+                    temp_path = f.name
+
+            copy_cmd = f'docker cp "{temp_path}" {self.config["name"]}:{container_modelfile_path}'
+            copy_result = subprocess.run(
+                copy_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=60
+            )
+            if copy_result.returncode != 0:
+                print(f"   ⚠️  Could not copy Modelfile to container: {copy_result.stderr}")
+                return False
+
+            # Clean up temp file if we created one
+            if not modelfile_path:
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+
+            # Create the custom model
+            create_cmd = f'docker exec {self.config["name"]} ollama create {custom_model_name} -f {container_modelfile_path}'
+            result = subprocess.run(
+                create_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=300
+            )
+
+            if result.returncode == 0:
+                print(f"   ✅ Created custom model: {custom_model_name}")
+                return True
+            else:
+                print(f"   ⚠️  Could not create custom model: {result.stderr}")
+                return False
+
         except subprocess.TimeoutExpired:
             print("   ⏰ Model creation timed out")
             return False
@@ -272,11 +353,9 @@ class OllamaManager:
         modelfile_path = Path(models_dir) / f"Modelfile.{base_model_name.replace(':', '-')}-{custom_suffix}"
         
         # Create minimal Modelfile with template as system prompt
-        modelfile_content = f'''FROM {base_model_name}
-
-SYSTEM """{template_content}"""
-'''
-        
+        # Sanitize template_content for Modelfile
+        safe_content = template_content.replace('"""', '"').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').replace('  ', ' ').strip()
+        modelfile_content = f"""FROM {base_model_name}\n\nSYSTEM \"\"\"{safe_content}\"\"\"\n"""
         # Create the custom model
         custom_model_name = f"{base_model_name}-{custom_suffix}"
         success = self.create_custom_model(
@@ -285,7 +364,7 @@ SYSTEM """{template_content}"""
             modelfile_content=modelfile_content,
             modelfile_path=str(modelfile_path)
         )
-        
+
         if success:
             print(f"   📁 Modelfile saved to: {modelfile_path}")
             return True, custom_model_name

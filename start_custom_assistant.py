@@ -51,90 +51,66 @@ Prerequisites:
     
     args = parser.parse_args()
     
+
     template_file = Path(args.template)
     if not template_file.exists():
         print(f"❌ Template file not found: {args.template}")
         return 1
-    
-    try:
-        # Import required modules
+
+    # Determine custom model name
+    if args.name:
+        custom_model_name = args.name
+    else:
+        custom_model_name = template_file.stem.replace("_", "-")
+
+    # Always use .ollama/Modelfile.<custom_model_name> for local modelfile
+    models_dir = Path('.ollama')
+    models_dir.mkdir(parents=True, exist_ok=True)
+    local_modelfile_path = models_dir / f"Modelfile.{custom_model_name}"
+
+    # Handle --remove flag
+    if args.remove:
         from ollama_manager import OllamaManager
-        from utility_manager import UtilityManager
-        import json
-        
-        # Load template
-        template_file = Path(args.template)
-        with open(template_file, 'r', encoding='utf-8') as f:
-            template_data = json.load(f)
-        
-        print(f"📋 Template: {template_data['name']}")
-        print(f"📝 Description: {template_data['description']}")
-        print()
-        
-        # Check if Ollama is running
         ollama_manager = OllamaManager()
         is_running, status_msg = ollama_manager.get_api_status()
-        
         if not is_running:
             print("❌ Ollama is not running!")
-            print("💡 Start Ollama first: python start_ollama.py")
+            print("� Start Ollama first: python start_ollama.py")
             return 1
-        
         print(f"✅ Ollama is running: {status_msg}")
-        
-        # Determine model names
+        print(f"🗑️  Removing custom model: {custom_model_name}")
+        removed = ollama_manager.remove_custom_model(custom_model_name)
+        if removed:
+            print(f"✅ Successfully removed custom model: {custom_model_name}")
+            return 0
+        else:
+            print(f"❌ Failed to remove custom model: {custom_model_name}")
+            return 1
+    
+    try:
+        from ollama_manager import OllamaManager
+        from utility_manager import UtilityManager
+        template_file = Path(args.template)
+        if not template_file.exists():
+            print(f"❌ Modelfile not found: {args.template}")
+            return 1
+
+        # Model name
         base_model = args.model or "qwen2.5:7b-instruct"
-        
-        # Create custom model name
         if args.name:
             custom_model_name = args.name
         else:
-            # Use model_name from template if available, otherwise generate from name field
-            if 'model_name' in template_data and template_data['model_name']:
-                short_name = template_data['model_name']
-            else:
-                # Extract meaningful words from template name, excluding common filler words
-                name_parts = template_data['name'].lower().split()
-                filler_words = {'system', 'prompt', 'assistant', 'generator', 'the', 'a', 'an', 'and', 'or', 'for', 'with', 'using'}
-                meaningful_words = [word for word in name_parts if word not in filler_words]
-                
-                # Take first 2-3 meaningful words to keep name short but descriptive
-                short_name = '-'.join(meaningful_words[:3]) if meaningful_words else 'custom-assistant'
-            
-            custom_model_name = f"{base_model.split(':')[0]}:{short_name}"
-        
-        if args.list:
-            print(f"\n📋 Models related to template '{template_data['name']}':")
-            models = ollama_manager.list_models()
-            template_models = [m for m in models if template_data['name'].lower().replace(' ', '-') in m]
-            if template_models:
-                for model in template_models:
-                    print(f"   • {model}")
-            else:
-                print("   No custom models found for this template")
-            return 0
-        
-        if args.remove:
-            print(f"🗑️  Removing custom model: {custom_model_name}")
-            try:
-                result = UtilityManager.run_subprocess(
-                    f"docker exec ollama ollama rm {custom_model_name}",
-                    check=False
-                )
-                if result.returncode == 0:
-                    print(f"✅ Successfully removed {custom_model_name}")
-                else:
-                    print(f"❌ Failed to remove {custom_model_name}: {result.stderr}")
-                return result.returncode
-            except Exception as e:
-                print(f"❌ Error removing model: {e}")
-                return 1
-        
-        # Deploy custom model
-        print(f"🤖 Base model: {base_model}")
-        print(f"🎯 Custom model: {custom_model_name}")
-        print()
-        
+            # Use filename (without extension) as model name
+            custom_model_name = template_file.stem.replace("_", "-")
+
+        ollama_manager = OllamaManager()
+        is_running, status_msg = ollama_manager.get_api_status()
+        if not is_running:
+            print("❌ Ollama is not running!")
+            print("� Start Ollama first: python start_ollama.py")
+            return 1
+        print(f"✅ Ollama is running: {status_msg}")
+
         # Check if base model exists
         models = ollama_manager.list_models()
         if base_model not in models:
@@ -152,22 +128,18 @@ Prerequisites:
             except Exception as e:
                 print(f"❌ Error pulling base model: {e}")
                 return 1
-        
-        # Create custom model
-        print(f"� Creating custom model...")
-        
+
+        # Deploy custom model
+        print(f"🤖 Base model: {base_model}")
+        print(f"🎯 Custom model: {custom_model_name}")
+        print()
         success = ollama_manager.create_custom_model(
             base_model=base_model,
             custom_model_name=custom_model_name,
-            modelfile_content=f'''FROM {base_model}
-
-SYSTEM """{template_data['system_prompt']}"""
-'''
+            template_file_path=str(template_file)
         )
-        
         if success:
             print(f"✅ Successfully created custom model: {custom_model_name}")
-            
             if args.test:
                 print(f"\n🧪 Testing custom model...")
                 try:
@@ -183,7 +155,6 @@ SYSTEM """{template_data['system_prompt']}"""
                         print(f"❌ Model test failed: {result.stderr}")
                 except Exception as e:
                     print(f"❌ Error testing model: {e}")
-            
             print()
             print("� Custom model deployment complete!")
             print()
@@ -191,12 +162,10 @@ SYSTEM """{template_data['system_prompt']}"""
             print("   1. Start WebUI: python start_webui.py")
             print(f"   2. Select model '{custom_model_name}' in the WebUI")
             print("   3. Start chatting with your custom assistant!")
-            
             return 0
         else:
             print(f"❌ Failed to create custom model")
             return 1
-                
     except Exception as e:
         print(f"❌ Error: {e}")
         return 1
