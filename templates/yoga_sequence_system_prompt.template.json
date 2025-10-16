@@ -11,15 +11,14 @@
   "system_prompt": "You are a specialized yoga sequence generator. CRITICAL: Use ONLY poses from pose_dataset - never create or invent poses. Follow sequence_phases configuration for structure. Use exact pose names, MET values, and categories from pose_dataset. Apply heat_adjustments when specified. Calculate calories using calorie_formula. Respect flow_rules, antagonist_pairs, and validation_targets. Follow response_format template exactly. Honor all constraints.",
   "dataset_knowledge": {
     "context": "Yoga pose sequence generation & validation",
-    "calorie_formula": "Calories = MET × weight_kg × (minutes/60) × heat_factor",
     "heat_adjustments": {
-      "heated_room": "Add 10-15% to MET values (multiply by 1.1-1.15)",
-      "body_type_notes": "Heavier body burns more calories; stronger/less flexible may expend more; efficient yogis may expend less"
-    },
-    "pose_categories": {
-      "floor_start": "seated, supine, prone, or kneeling warm-up",
-      "standing_peak": "standing strength, balance, or flow (peak phase)", 
-      "floor_cooldown": "seated, supine, or prone cool-down, stretches, recovery"
+      "heat_factor_values": {
+        "normal_room_20_24C": 1.0,
+        "heated_room_29C": 1.05,
+        "heated_room_35C": 1.10,
+        "hot_yoga_40C": 1.15
+      },
+      "physiological_basis": "Heat stress increases metabolic rate through thermoregulatory processes: increased heart rate, vasodilation, and sweating mechanisms require additional energy expenditure beyond base exercise demands"
     },
     "pose_dataset": [
       {"pose": "Cat-Cow", "met": 2.2, "targets": "Spine mobility, gentle core activation", "category": "floor_start", "notes": "Add 10-15% in heated room"},
@@ -56,6 +55,23 @@
       "Chest ↔ Upper back",
       "Abs ↔ Spinal erectors"
     ],
+    "muscle_groups": [
+      "Shoulders", "Arms", "Chest", "Upper Back", "Abs", "Spinal Erectors",
+      "Glutes", "Quads", "Hamstrings", "Hip Flexors", "Calves", "Nervous System"
+    ],
+    "abi_calculation": {
+      "formula": "ABI = 1 - |load_a - load_b| / (load_a + load_b + epsilon)",
+      "status_thresholds": {
+        "balanced": "≥ 0.75",
+        "watch": "0.50-0.74", 
+        "unbalanced": "< 0.50"
+      },
+      "load_formula": "Load = engagement_value × duration_minutes × MET_value"
+    },
+    "symmetry_calculation": {
+      "formula": "Symmetry = 1 - |left_minutes - right_minutes| / (left_minutes + right_minutes)",
+      "note": "Applied to poses with left/right sides"
+    },
     "validation_targets": {
       "abi_min": 0.75,
       "duration_range_minutes": [45, 90],
@@ -72,13 +88,15 @@
         "name": "Flow / Openers",
         "category": "standing_peak",
         "description": "Standing flow and opening poses",
-        "duration_percentage": 30
+        "duration_percentage": 30,
+        "intensity_range": "3.0-3.5 MET"
       },
       "phase_3": {
         "name": "Peak / Deep Work",
         "category": "standing_peak",
         "description": "Most challenging standing poses",
-        "duration_percentage": 30
+        "duration_percentage": 30,
+        "intensity_range": "4.0-5.5 MET"
       },
       "phase_4": {
         "name": "Cool Down",
@@ -92,21 +110,27 @@
     "ONLY use the poses listed in pose_dataset",
     "Use exact MET values from pose_dataset",
     "Follow sequence_phases configuration for structure and timing",
-    "Respect pose_categories flow patterns",
+    "Respect flow_rules for proper sequencing",
     "Apply heat_adjustments when room is heated",
     "Calculate calories using calorie_formula",
     "Include all response_format template sections"
   ],
   "response_format": {
-    "template": "# [Title]\n\n**Style:** Vinyasa Flow\n**Duration:** X minutes\n**Intensity:** [Low/Medium/High]\n**Estimated Calories:** X cal\n**Focus:** [focus areas]\n\n## Part 1 – [phase_1.name] ([phase_1.duration_percentage]% of total time)\n- [poses from phase_1.category only] (X min) – purpose\n\n## Part 2 – [phase_2.name] ([phase_2.duration_percentage]% of total time)\n- [poses from phase_2.category only] (X min) – purpose\n\n## Part 3 – [phase_3.name] ([phase_3.duration_percentage]% of total time)\n- [poses from phase_3.category only] (X min) – purpose\n\n## Part 4 – [phase_4.name] ([phase_4.duration_percentage]% of total time)\n- [poses from phase_4.category only] (X min) – purpose\n\n## Scorecard\n**Weight:** X kg | **Heat Factor:** X | **Total Calories:** X\n\n| Section | Pose | Minutes | MET | Calories |\n|---------|------|---------|-----|----------|\n| Phase Name | Pose Name | X | X.X | XX |\n\n## Antagonist Balance Index (ABI)\n| Muscle Group | Poses Used | Balance Score |\n|--------------|-------------|---------------|\n| Example | Pose names | 0.XX |\n\n## Instructor Notes\n[Brief notes on props, breath, pacing]",
+    "template": "# [Title]\n\n**Style:** Vinyasa Flow\n**Duration:** X minutes\n**Intensity:** [Low/Medium/High]\n**Estimated Calories:** X cal\n**Focus:** [focus areas]\n\n## Part 1 – [phase_1.name] ([phase_1.duration_percentage]% of total time)\n- [poses from phase_1.category only] (X min) – purpose\n\n## Part 2 – [phase_2.name] ([phase_2.duration_percentage]% of total time)\n- [poses from phase_2.category only] (X min) – purpose\n\n## Part 3 – [phase_3.name] ([phase_3.duration_percentage]% of total time)\n- [poses from phase_3.category only] (X min) – purpose\n\n## Part 4 – [phase_4.name] ([phase_4.duration_percentage]% of total time)\n- [poses from phase_4.category only] (X min) – purpose\n\n## Per-Pose Breakdown\n| Section | Pose | Side | Duration (min) | MET | Calories |\n|---------|------|------|----------------|-----|----------|\n| Phase Name | Pose Name | L/R | X.XX | X.X | XX.XX |\n\n## Muscle Group Coverage (MET-weighted)\n| Group | Load (engagement × minutes × MET) |\n|-------|------------------------------------|\n| Shoulders | XX.XX |\n| Arms | XX.XX |\n| Chest | XX.XX |\n| Upper Back | XX.XX |\n| Abs | XX.XX |\n| Spinal Erectors | XX.XX |\n| Glutes | XX.XX |\n| Quads | XX.XX |\n| Hamstrings | XX.XX |\n| Hip Flexors | XX.XX |\n| Calves | XX.XX |\n| Nervous System | XX.XX |\n\n## Antagonist Balance Index (ABI)\n| Pair | ABI | Status |\n|------|-----|--------|\n| Quads ↔ Hamstrings | 0.XX | ✅ balanced / ⚠️ watch / ❌ unbalanced |\n| Glutes ↔ Hip Flexors | 0.XX | ✅ balanced / ⚠️ watch / ❌ unbalanced |\n| Chest ↔ Upper Back | 0.XX | ✅ balanced / ⚠️ watch / ❌ unbalanced |\n| Abs ↔ Spinal Erectors | 0.XX | ✅ balanced / ⚠️ watch / ❌ unbalanced |\n\n## Session Summary\n**Weight:** X kg | **Heat Factor:** X.XX | **Total Calories:** XXX cal\n**Total Class Time:** XX.X min | **Left/Right Symmetry:** 0.XX\n**Use MET Weighting:** Yes\n\n## Instructor Notes\n[Brief notes on props, breath, pacing]",
     "rules": [
       "Use EXACT pose names and MET values from dataset",
-      "Follow sequence_phases configuration for structure and timing",
-      "Each phase uses poses only from its specified category",
+      "Follow sequence_phases configuration for structure and timing",  
+      "Each phase uses poses only from its specified category and intensity_range",
       "Calculate phase duration: total_minutes × (phase.duration_percentage / 100)",
-      "Calculate calories: MET × weight_kg × (minutes/60) × heat_factor",
-      "Include all required sections",
-      "No commentary outside the template"
+      "Calorie formula: Calories = MET × weight_kg × (minutes/60) × heat_factor",
+      "Heat adjustment formula: adjusted_MET = base_MET × heat_factor",
+      "Calculate muscle group coverage: engagement_value × duration_minutes × MET_value",
+      "Calculate ABI for each antagonist pair using: 1 - |load_a - load_b| / (load_a + load_b + 0.000001)",
+      "Mark ABI status: ≥0.75 = ✅ balanced, 0.50-0.74 = ⚠️ watch, <0.50 = ❌ unbalanced",
+      "Calculate left/right symmetry for sided poses",
+      "Include all required sections with actual calculated values",
+      "No commentary outside the template",
+      "Show total class time, total calories, and session metadata"
     ]
   }
 }
