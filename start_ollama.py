@@ -55,12 +55,16 @@ Access:
                        help="Show Ollama container logs")
     parser.add_argument("--model", type=str,
                        help="Pull a specific model (use with --pull)")
+    parser.add_argument("--override", type=str,
+                       help="Specify a custom Docker Compose override file (e.g., docker-compose.yoga-assistant-override.yml)")
     
     args = parser.parse_args()
     
     # Build compose files list
     compose_files = ["docker-compose.ollama.yml"]
-    if not args.cpu:
+    if args.override:
+        compose_files.append(args.override)
+    elif not args.cpu:
         compose_files.append("docker-compose.gpu-override.yml")
     
     # Create Ollama manager
