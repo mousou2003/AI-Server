@@ -26,17 +26,86 @@
 - [🏗️ Architecture Details](#%EF%B8%8F-architecture-details)
 
 ### Additional Resources
-- [🔍 Verification & Testing](#-verification--testing)
-- [🙌 Acknowledgments](#-acknowledgments)
-- [📌 Repository](#-repository)
 
----
 
 ## 🎯 **Platform Overview**
 
-This project provides a **fully local AI infrastructure** with multiple specialized modes:
 
-### 1. **Development Assistant Mode** 💻
+## 🧰 Utilities: PDF ➜ Markdown OCR (New)
+
+Convert one or many PDFs to Markdown using local OCR via Ollama's Qwen2.5-VL model.
+
+Prerequisites:
+- Ollama running and the model `qwen2.5vl` pulled and available
+- This repo's Python dependencies installed (requests, PyMuPDF, Pillow)
+
+Examples:
+
+```powershell
+# 1) Single PDF ➜ per-page Markdown files (default behavior)
+python .\create_mkd_from_PDF.py .\docs\report.pdf
+
+# 2) Single PDF ➜ one combined Markdown file
+python .\create_mkd_from_PDF.py .\docs\report.pdf .\docs\report.md --combined
+
+# 3) Folder of PDFs ➜ one combined Markdown file
+python .\create_mkd_from_PDF.py .\docs .\docs\all-docs.md --combined
+
+# Optional page range (1-indexed)
+python .\create_mkd_from_PDF.py .\docs\report.pdf --start 2 --end 10 --combined
+
+# Optional different extension when targeting a folder (default: pdf)
+python .\create_mkd_from_PDF.py .\scans .\scans\all.md --combined --ext pdf
+```
+
+Notes:
+- Without `--combined`, the script saves one Markdown file per page next to the source PDF(s).
+- With `--combined` and a folder input, all matching PDFs are merged into a single Markdown.
+- With `--combined` and a single PDF, all pages are merged into one Markdown.
+- If no `output_md` is provided when combining, the script uses a sensible default name.
+- Ensure Ollama is running at the configured URL and `qwen2.5vl` is available.
+
+### Images ➜ Markdown via OCR
+
+You can also process images directly (png, jpg, jpeg, webp, bmp, tiff):
+
+```powershell
+# Single image ➜ Markdown
+python .\create_mkd_from_PDF.py .\images\scan_01.png
+
+# Single image ➜ specific output path
+python .\create_mkd_from_PDF.py .\images\scan_01.jpg .\images\scan_01.md
+
+# Folder of images (png) ➜ one combined Markdown
+python .\create_mkd_from_PDF.py .\images .\images\all-images.md --combined --ext png
+
+# Folder of images (jpg) ➜ per-file Markdown (no --combined)
+python .\create_mkd_from_PDF.py .\images --ext jpg
+```
+
+## 🧰 Utilities: Merge Markdown ➜ One Markdown (New)
+
+Combine multiple Markdown files in a folder into a single Markdown file.
+
+Examples:
+
+```powershell
+# Combine all .md files in a folder into one file
+python .\create_mkd_from_PDF.py .\notes .\notes\combined.md --combine-md
+
+# Use a different extension (e.g., .mkd)
+python .\create_mkd_from_PDF.py .\notes .\notes\combined.md --combine-md --md-ext mkd
+
+# Skip per-file headers in the combined output
+python .\create_mkd_from_PDF.py .\notes .\notes\combined.md --combine-md --no-file-headers
+```
+
+Notes:
+- When using `--combine-md`, the positional path must be a folder.
+- Files are included in sorted order by filename.
+- By default, the output includes a section header per file. Disable with `--no-file-headers`.
+- If `output_md` is omitted, the default is `<foldername>.md` inside the folder.
+
 - 💬 Inline prompt support in VS Code via **Continue**
 - ⚙️ **DeepSeek Coder V2 Lite** served by **llama.cpp** standalone server
 - 🧠 Code generation, editing, and autocomplete capabilities

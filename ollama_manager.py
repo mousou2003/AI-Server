@@ -8,6 +8,37 @@ from utility_manager import UtilityManager
 
 
 class OllamaManager:
+    def stream_inference(self, model_name, prompt, images=None, timeout=600):
+        """
+        Run streaming inference on Ollama and yield incremental responses.
+        Args:
+            model_name (str): Model to use
+            prompt (str): Prompt text
+            images (list[str], optional): List of base64-encoded images
+            timeout (int): Request timeout in seconds
+        Yields:
+            str: Partial response text
+        """
+        import requests, json
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": True
+        }
+        if images:
+            payload["images"] = images
+        try:
+            response = requests.post(f"{self.config['url']}/api/generate", json=payload, stream=True, timeout=timeout)
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line)
+                        yield chunk.get("response", "")
+                    except Exception:
+                        continue
+        except Exception as e:
+            print(f"[ERROR] Streaming inference failed: {e}")
+            yield f"[Streaming error: {e}]"
 
     def remove_custom_model(self, custom_model_name):
         """
